@@ -7,6 +7,7 @@ use structopt::StructOpt;
 #[derive(StructOpt)]
 enum Command {
     Init(Init),
+    Commit(Commit),
 }
 
 /// Initialize a new git repository.
@@ -17,6 +18,9 @@ struct Init {
     /// Default to current working directory if not provided.
     root: Option<path::PathBuf>,
 }
+
+#[derive(StructOpt)]
+struct Commit {}
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -41,6 +45,14 @@ fn main() -> anyhow::Result<()> {
 
             log::info!("Initialized empty git repository at `{}`", root.display());
 
+            Ok(())
+        }
+        Command::Commit(Commit {}) => {
+            let root = env::current_dir()?;
+            let workspace = grit::Workspace::new(root);
+            for path in workspace.files() {
+                dbg!(path?);
+            }
             Ok(())
         }
     }
