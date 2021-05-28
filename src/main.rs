@@ -49,9 +49,16 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Commit(Commit {}) => {
             let root = env::current_dir()?;
+            let git = root.join(".git");
+            let objects = git.join("objects");
+
             let workspace = grit::Workspace::new(root);
+            let database = grit::Database::new(objects);
+
             for path in workspace.files() {
-                dbg!(path?);
+                let path = path?;
+                let data = fs::read(path)?;
+                database.store(&grit::db::Object::Blob(data))?;
             }
             Ok(())
         }

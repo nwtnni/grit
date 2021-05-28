@@ -9,6 +9,8 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 env_logger = "0.8"
+flate2 = "1.0"
 log = "0.4"
+sha1 = "0.6"
 structopt = "0.3"
 walkdir = "2.3"
