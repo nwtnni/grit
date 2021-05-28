@@ -1,3 +1,3 @@
-mod workspace;
+mod ws;
 
-pub use workspace::Workspace;
+pub use ws::Workspace;
