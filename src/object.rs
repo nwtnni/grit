@@ -84,23 +84,20 @@ impl Id {
 
         let mut id = [0u8; 20];
 
-        for (source, target) in bytes.chunks(2).zip(&mut id) {
-            *target = hex_decode(source);
-        }
+        bytes
+            .chunks(2)
+            .zip(&mut id)
+            .for_each(|(source, target)| *target = hex_decode(source));
 
         Ok(Id(id))
     }
 
-    pub fn directory(&self) -> path::PathBuf {
-        let mut buffer = String::with_capacity(2);
+    pub fn to_path_buf(&self) -> path::PathBuf {
+        let mut buffer = String::with_capacity(40);
         let (hi, lo) = hex_encode(self.0[0]);
         buffer.push(hi as char);
         buffer.push(lo as char);
-        path::PathBuf::from(buffer)
-    }
-
-    pub fn file_name(&self) -> path::PathBuf {
-        let mut buffer = String::with_capacity(38);
+        buffer.push('/');
         for byte in &self.0[1..] {
             let (hi, lo) = hex_encode(*byte);
             buffer.push(hi as char);
@@ -134,12 +131,14 @@ impl<T: AsRef<[u8]>> From<T> for Id {
     }
 }
 
+#[inline]
 fn hex_encode(byte: u8) -> (u8, u8) {
     let hi = byte >> 4;
     let lo = byte & 0b1111;
     (HEX_ENCODE[hi as usize], HEX_ENCODE[lo as usize])
 }
 
+#[inline]
 fn hex_decode(code: &[u8]) -> u8 {
     let hi = HEX_DECODE[code[0] as usize];
     let lo = HEX_DECODE[code[1] as usize];

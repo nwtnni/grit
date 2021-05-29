@@ -1,8 +1,8 @@
-use std::fs;
 use std::io;
 use std::io::Write as _;
 use std::path;
 
+use crate::file;
 use crate::object;
 use crate::Object;
 
@@ -12,31 +12,25 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(root: path::PathBuf) -> Self {
-        Database { root }
+    pub fn new(git: &path::Path) -> io::Result<Self> {
+        Ok(Database {
+            root: git.join("objects"),
+        })
     }
 
     pub fn store(&self, object: &Object) -> io::Result<object::Id> {
         let data = object.encode();
         let id = object::Id::from(&data);
+        let path = self.root.join(id.to_path_buf());
 
-        let mut path = self.root.join(id.directory());
-        fs::create_dir_all(&path)?;
-        path.push(id.file_name());
+        let mut file = file::Temp::new(path)?;
+        let mut stream =
+            flate2::write::ZlibEncoder::new(&mut **file, flate2::Compression::default());
 
-        let mut file = match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-        {
-            Ok(file) => flate2::write::ZlibEncoder::new(file, flate2::Compression::default()),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => return Ok(id),
-            Err(error) => return Err(error),
-        };
+        stream.write_all(&data)?;
+        stream.finish()?;
+        file.commit()?;
 
-        // TODO: write to temp file and atomically rename
-        file.write_all(&data)?;
-        file.finish()?;
         Ok(id)
     }
 }

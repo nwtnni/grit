@@ -80,10 +80,9 @@ fn main() -> anyhow::Result<()> {
 
             let root = env::current_dir()?;
             let git = root.join(".git");
-            let objects = git.join("objects");
 
             let workspace = grit::Workspace::new(root);
-            let database = grit::Database::new(objects);
+            let database = grit::Database::new(&git)?;
             let reference = grit::Reference::new(git);
 
             let mut nodes = Vec::new();

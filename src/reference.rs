@@ -3,7 +3,7 @@ use std::io;
 use std::io::Write as _;
 use std::path;
 
-use crate::lock;
+use crate::file;
 use crate::object;
 
 #[derive(Clone, Debug)]
@@ -21,7 +21,7 @@ impl Reference {
     }
 
     pub fn set_head(&self, id: &object::Id) -> io::Result<()> {
-        let mut head = lock::File::new(self.head.clone())?;
+        let mut head = file::Lock::new(self.head.clone())?;
         write!(&mut *head, "{}", id)?;
         head.commit()
     }
