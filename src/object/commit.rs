@@ -6,14 +6,21 @@ use crate::object;
 #[derive(Clone, Debug)]
 pub struct Commit {
     tree: object::Id,
+    parent: Option<object::Id>,
     author: Author,
     message: String,
 }
 
 impl Commit {
-    pub fn new(tree: object::Id, author: Author, message: String) -> Self {
+    pub fn new(
+        tree: object::Id,
+        parent: Option<object::Id>,
+        author: Author,
+        message: String,
+    ) -> Self {
         Commit {
             tree,
+            parent,
             author,
             message,
         }
@@ -26,6 +33,11 @@ impl Commit {
     pub fn encode_mut(&self, buffer: &mut Vec<u8>) {
         buffer.extend_from_slice(b"tree ");
         write!(buffer, "{}", self.tree).expect("[UNREACHABLE]: write to `Vec` failed");
+
+        if let Some(parent) = self.parent {
+            buffer.extend_from_slice(b"\nparent ");
+            write!(buffer, "{}", parent).expect("[UNREACHABLE]: write to `Vec` failed");
+        }
 
         buffer.extend_from_slice(b"\nauthor ");
         self.author.encode_mut(buffer);
@@ -43,6 +55,11 @@ impl Commit {
 
     pub fn len(&self) -> usize {
         5 + self.tree.as_bytes().len() * 2
+            + if let Some(parent) = self.parent {
+                8 + parent.as_bytes().len() * 2
+            } else {
+                0
+            }
             + 8
             + self.author.len()
             + 11

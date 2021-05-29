@@ -81,10 +81,10 @@ fn main() -> anyhow::Result<()> {
             let root = env::current_dir()?;
             let git = root.join(".git");
             let objects = git.join("objects");
-            let head = git.join("HEAD");
 
             let workspace = grit::Workspace::new(root);
             let database = grit::Database::new(objects);
+            let reference = grit::Reference::new(git);
 
             let mut nodes = Vec::new();
 
@@ -107,12 +107,22 @@ fn main() -> anyhow::Result<()> {
             let commit_header = message.split('\n').next().unwrap_or_default().to_owned();
 
             let author = commit::Author::new(author_name, author_email, chrono::Local::now());
-            let commit = Object::Commit(object::Commit::new(tree_id, author, message));
+            let parent = reference.head()?;
+            let commit = Object::Commit(object::Commit::new(tree_id, parent, author, message));
             let commit_id = database.store(&commit)?;
 
-            fs::write(head, commit_id.to_string())?;
+            reference.set_head(&commit_id)?;
 
-            println!("[(root-commit) {}] {}", commit_id, commit_header);
+            println!(
+                "[{}{}] {}",
+                if parent.is_some() {
+                    ""
+                } else {
+                    "(root-commit)"
+                },
+                commit_id,
+                commit_header
+            );
 
             Ok(())
         }

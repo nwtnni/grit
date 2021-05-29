@@ -70,7 +70,11 @@ impl Id {
         if bytes.len() != 40 || bytes.iter().any(|byte| DECODE[*byte as usize] == 255) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Expected 40 hexadecimal characters, but found {:?}", bytes),
+                format!(
+                    "Expected 40 hexadecimal characters, but found {}: {:02x?}",
+                    bytes.len(),
+                    bytes,
+                ),
             ));
         }
 
