@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
             for path in workspace.files() {
                 let path = path?;
                 let data = fs::read(path)?;
-                database.store(&grit::db::Object::Blob(data))?;
+                database.store(&grit::Object::Blob(data))?;
             }
             Ok(())
         }
