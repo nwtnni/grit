@@ -1,5 +1,7 @@
 pub mod database;
+mod lock;
 pub mod object;
+mod util;
 pub mod workspace;
 
 pub use database::Database;
