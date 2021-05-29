@@ -16,12 +16,9 @@ impl Database {
         Database { root }
     }
 
-    pub fn store(&self, object: &Object) -> io::Result<()> {
-        let data = object.encode();
-        let id = object::Id::from(&*data);
-
+    pub fn store(&self, id: &object::Id, data: &[u8]) -> io::Result<()> {
         let mut path = self.root.join(id.directory());
-        fs::create_dir(&path)?;
+        fs::create_dir_all(&path)?;
         path.push(id.file_name());
 
         let mut file = match fs::OpenOptions::new()

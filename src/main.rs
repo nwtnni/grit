@@ -2,6 +2,10 @@ use std::env;
 use std::fs;
 use std::path;
 
+use grit::object;
+use grit::object::tree;
+use grit::object::Tree;
+use grit::Object;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -55,13 +59,29 @@ fn main() -> anyhow::Result<()> {
             let workspace = grit::Workspace::new(root);
             let database = grit::Database::new(objects);
 
+            let mut nodes = Vec::new();
+
             for path in workspace.files() {
                 let path = path?;
-                let data = fs::read(path)
-                    .map(grit::object::Blob::new)
-                    .map(grit::Object::Blob)?;
-                database.store(&data)?;
+                let blob = fs::read(&path).map(object::Blob::new).map(Object::Blob)?;
+                let data = blob.encode();
+                let id = object::Id::from(&data);
+
+                database.store(&id, &data)?;
+
+                let relative = path
+                    .strip_prefix(workspace.root())
+                    .expect("[UNREACHABLE]: workspace root is always prefix of path")
+                    .to_path_buf();
+
+                nodes.push(tree::Node::new(relative, id));
             }
+
+            let tree = Object::Tree(Tree::new(nodes));
+            let data = tree.encode();
+            let id = object::Id::from(&data);
+            database.store(&id, &data)?;
+
             Ok(())
         }
     }

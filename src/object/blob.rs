@@ -1,5 +1,3 @@
-use std::io::Write as _;
-
 #[derive(Clone, Debug)]
 pub struct Blob(Vec<u8>);
 
@@ -8,18 +6,12 @@ impl Blob {
         Blob(data)
     }
 
-    pub fn encode(&self) -> Vec<u8> {
-        let mut buffer = Vec::new();
-        buffer.extend_from_slice(self.r#type());
-        buffer.push(b' ');
-        write!(&mut buffer, "{}", self.len()).expect("[UNREACHABLE]: write to `Vec` failed");
-        buffer.push(0);
+    pub fn encode_mut(&self, buffer: &mut Vec<u8>) {
         buffer.extend_from_slice(&self.0);
-        buffer
     }
 
-    pub fn r#type(&self) -> &'static [u8] {
-        b"blob"
+    pub fn r#type(&self) -> &'static str {
+        "blob"
     }
 
     pub fn len(&self) -> usize {

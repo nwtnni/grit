@@ -1,34 +1,51 @@
 use std::fmt;
 use std::fmt::Write as _;
+use std::io::Write as _;
 use std::path;
 
 use sha1::Sha1;
 
-mod blob;
+pub mod blob;
+pub mod tree;
 
 pub use blob::Blob;
+pub use tree::Tree;
 
 #[derive(Clone, Debug)]
 pub enum Object {
     Blob(Blob),
+    Tree(Tree),
 }
 
 impl Object {
     pub fn encode(&self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+
+        buffer.extend_from_slice(self.r#type().as_bytes());
+        buffer.push(b' ');
+
+        write!(&mut buffer, "{}", self.len()).expect("[UNREACHABLE]: write to `Vec` failed");
+        buffer.push(0);
+
         match self {
-            Object::Blob(blob) => blob.encode(),
+            Object::Blob(blob) => blob.encode_mut(&mut buffer),
+            Object::Tree(tree) => tree.encode_mut(&mut buffer),
         }
+
+        buffer
     }
 
-    pub fn r#type(&self) -> &'static [u8] {
+    fn r#type(&self) -> &'static str {
         match self {
             Object::Blob(blob) => blob.r#type(),
+            Object::Tree(tree) => tree.r#type(),
         }
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         match self {
             Object::Blob(blob) => blob.len(),
+            Object::Tree(tree) => tree.len(),
         }
     }
 }
@@ -37,12 +54,14 @@ impl Object {
 pub struct Id([u8; 20]);
 
 impl Id {
-    #[inline]
+    pub fn as_bytes(&self) -> &[u8; 20] {
+        &self.0
+    }
+
     pub fn directory(&self) -> path::PathBuf {
         path::PathBuf::from(format!("{:02x}", self.0[0]))
     }
 
-    #[inline]
     pub fn file_name(&self) -> path::PathBuf {
         let mut buffer = String::new();
         for byte in &self.0[1..] {

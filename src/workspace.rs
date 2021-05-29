@@ -10,6 +10,10 @@ impl Workspace {
         Workspace { root }
     }
 
+    pub fn root(&self) -> &path::Path {
+        &self.root
+    }
+
     pub fn files(&self) -> impl Iterator<Item = anyhow::Result<path::PathBuf>> {
         walkdir::WalkDir::new(&self.root)
             .max_depth(1)
