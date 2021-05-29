@@ -1,10 +1,12 @@
 use std::env;
 use std::fs;
+use std::io;
+use std::io::Read as _;
 use std::path;
 
 use grit::object;
+use grit::object::commit;
 use grit::object::tree;
-use grit::object::Tree;
 use grit::Object;
 use structopt::StructOpt;
 
@@ -24,7 +26,16 @@ struct Init {
 }
 
 #[derive(StructOpt)]
-struct Commit {}
+struct Commit {
+    #[structopt(long, env = "GIT_AUTHOR_NAME")]
+    author_name: String,
+
+    #[structopt(long, env = "GIT_AUTHOR_EMAIL")]
+    author_email: String,
+
+    #[structopt(short, long)]
+    message: Option<String>,
+}
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -51,10 +62,26 @@ fn main() -> anyhow::Result<()> {
 
             Ok(())
         }
-        Command::Commit(Commit {}) => {
+        Command::Commit(Commit {
+            author_name,
+            author_email,
+            message,
+        }) => {
+            let message = match message {
+                Some(message) => message,
+                None => {
+                    let stdin = io::stdin();
+                    let mut stdin = stdin.lock();
+                    let mut buffer = String::new();
+                    stdin.read_to_string(&mut buffer)?;
+                    buffer
+                }
+            };
+
             let root = env::current_dir()?;
             let git = root.join(".git");
             let objects = git.join("objects");
+            let head = git.join("HEAD");
 
             let workspace = grit::Workspace::new(root);
             let database = grit::Database::new(objects);
@@ -64,23 +91,35 @@ fn main() -> anyhow::Result<()> {
             for path in workspace.files() {
                 let path = path?;
                 let blob = fs::read(&path).map(object::Blob::new).map(Object::Blob)?;
-                let data = blob.encode();
-                let id = object::Id::from(&data);
+                let blob_data = blob.encode();
+                let blob_id = object::Id::from(&blob_data);
 
-                database.store(&id, &data)?;
+                database.store(&blob_id, &blob_data)?;
 
                 let relative = path
                     .strip_prefix(workspace.root())
                     .expect("[UNREACHABLE]: workspace root is always prefix of path")
                     .to_path_buf();
 
-                nodes.push(tree::Node::new(relative, id));
+                nodes.push(tree::Node::new(relative, blob_id));
             }
 
-            let tree = Object::Tree(Tree::new(nodes));
-            let data = tree.encode();
-            let id = object::Id::from(&data);
-            database.store(&id, &data)?;
+            let tree = object::Tree::new(nodes);
+            let tree_data = Object::Tree(tree).encode();
+            let tree_id = object::Id::from(&tree_data);
+            database.store(&tree_id, &tree_data)?;
+
+            let commit_header = message.split('\n').next().unwrap_or_default().to_owned();
+
+            let author = commit::Author::new(author_name, author_email, chrono::Local::now());
+            let commit = object::Commit::new(tree_id, author, message);
+            let commit_data = Object::Commit(commit).encode();
+            let commit_id = object::Id::from(&commit_data);
+            database.store(&commit_id, &commit_data)?;
+
+            fs::write(head, commit_id.to_string())?;
+
+            println!("[(root-commit) {}] {}", commit_id, commit_header);
 
             Ok(())
         }

@@ -6,14 +6,17 @@ use std::path;
 use sha1::Sha1;
 
 pub mod blob;
+pub mod commit;
 pub mod tree;
 
 pub use blob::Blob;
+pub use commit::Commit;
 pub use tree::Tree;
 
 #[derive(Clone, Debug)]
 pub enum Object {
     Blob(Blob),
+    Commit(Commit),
     Tree(Tree),
 }
 
@@ -29,6 +32,7 @@ impl Object {
 
         match self {
             Object::Blob(blob) => blob.encode_mut(&mut buffer),
+            Object::Commit(commit) => commit.encode_mut(&mut buffer),
             Object::Tree(tree) => tree.encode_mut(&mut buffer),
         }
 
@@ -38,6 +42,7 @@ impl Object {
     fn r#type(&self) -> &'static str {
         match self {
             Object::Blob(blob) => blob.r#type(),
+            Object::Commit(commit) => commit.r#type(),
             Object::Tree(tree) => tree.r#type(),
         }
     }
@@ -45,6 +50,7 @@ impl Object {
     fn len(&self) -> usize {
         match self {
             Object::Blob(blob) => blob.len(),
+            Object::Commit(commit) => commit.len(),
             Object::Tree(tree) => tree.len(),
         }
     }

@@ -4,7 +4,6 @@ use std::io::Write as _;
 use std::path;
 
 use crate::object;
-use crate::Object;
 
 #[derive(Debug)]
 pub struct Database {
