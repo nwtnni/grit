@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::io::Read as _;
+use std::os::unix::fs::PermissionsExt as _;
 use std::path;
 
 use grit::object;
@@ -89,6 +90,7 @@ fn main() -> anyhow::Result<()> {
 
             for path in workspace.files() {
                 let path = path?;
+                let mode = path.metadata()?.permissions().mode();
                 let blob = fs::read(&path).map(object::Blob::new).map(Object::Blob)?;
                 let blob_id = database.store(&blob)?;
 
@@ -97,7 +99,7 @@ fn main() -> anyhow::Result<()> {
                     .expect("[UNREACHABLE]: workspace root is always prefix of path")
                     .to_path_buf();
 
-                nodes.push(tree::Node::new(relative, blob_id));
+                nodes.push(tree::Node::new(relative, blob_id, mode));
             }
 
             let tree = Object::Tree(object::Tree::new(nodes));
