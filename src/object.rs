@@ -67,6 +67,9 @@ impl Id {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> io::Result<Self> {
+        // Strip trailing newline
+        let bytes = bytes.strip_suffix(&[b'\n']).unwrap_or(bytes);
+
         if bytes.len() != 40 || bytes.iter().any(|byte| DECODE[*byte as usize] == 255) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
