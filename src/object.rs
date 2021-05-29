@@ -1,38 +1,32 @@
 use std::fmt;
 use std::fmt::Write as _;
-use std::io::Write as _;
 use std::path;
 
 use sha1::Sha1;
 
+mod blob;
+
+pub use blob::Blob;
+
 #[derive(Clone, Debug)]
 pub enum Object {
-    Blob(Vec<u8>),
+    Blob(Blob),
 }
 
 impl Object {
     pub fn encode(&self) -> Vec<u8> {
-        let mut buffer = Vec::new();
-
-        buffer.extend_from_slice(self.r#type());
-        buffer.push(b' ');
-        write!(&mut buffer, "{}", self.len()).expect("[UNREACHABLE]: write to `Vec` failed");
-        buffer.push(0);
-
         match self {
-            Object::Blob(blob) => buffer.extend_from_slice(&blob),
-        }
-
-        buffer
-    }
-
-    fn r#type(&self) -> &'static [u8] {
-        match self {
-            Object::Blob(_) => b"blob",
+            Object::Blob(blob) => blob.encode(),
         }
     }
 
-    fn len(&self) -> usize {
+    pub fn r#type(&self) -> &'static [u8] {
+        match self {
+            Object::Blob(blob) => blob.r#type(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
         match self {
             Object::Blob(blob) => blob.len(),
         }
