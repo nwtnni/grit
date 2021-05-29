@@ -91,10 +91,7 @@ fn main() -> anyhow::Result<()> {
             for path in workspace.files() {
                 let path = path?;
                 let blob = fs::read(&path).map(object::Blob::new).map(Object::Blob)?;
-                let blob_data = blob.encode();
-                let blob_id = object::Id::from(&blob_data);
-
-                database.store(&blob_id, &blob_data)?;
+                let blob_id = database.store(&blob)?;
 
                 let relative = path
                     .strip_prefix(workspace.root())
@@ -104,18 +101,14 @@ fn main() -> anyhow::Result<()> {
                 nodes.push(tree::Node::new(relative, blob_id));
             }
 
-            let tree = object::Tree::new(nodes);
-            let tree_data = Object::Tree(tree).encode();
-            let tree_id = object::Id::from(&tree_data);
-            database.store(&tree_id, &tree_data)?;
+            let tree = Object::Tree(object::Tree::new(nodes));
+            let tree_id = database.store(&tree)?;
 
             let commit_header = message.split('\n').next().unwrap_or_default().to_owned();
 
             let author = commit::Author::new(author_name, author_email, chrono::Local::now());
-            let commit = object::Commit::new(tree_id, author, message);
-            let commit_data = Object::Commit(commit).encode();
-            let commit_id = object::Id::from(&commit_data);
-            database.store(&commit_id, &commit_data)?;
+            let commit = Object::Commit(object::Commit::new(tree_id, author, message));
+            let commit_id = database.store(&commit)?;
 
             fs::write(head, commit_id.to_string())?;
 
