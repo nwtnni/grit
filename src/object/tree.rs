@@ -42,7 +42,7 @@ impl Node {
     }
 
     fn encode_mut(&self, buffer: &mut Vec<u8>) {
-        write!(buffer, "{:<07}", 10644).expect("[UNREACHABLE]: write to `Vec` failed");
+        write!(buffer, "{:<7}", 100644).expect("[UNREACHABLE]: write to `Vec` failed");
         buffer.extend_from_slice(self.path.as_os_str().as_bytes());
         buffer.push(0);
         buffer.extend_from_slice(self.id.as_bytes());

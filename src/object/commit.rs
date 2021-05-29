@@ -25,7 +25,7 @@ impl Commit {
 
     pub fn encode_mut(&self, buffer: &mut Vec<u8>) {
         buffer.extend_from_slice(b"tree ");
-        buffer.extend_from_slice(self.tree.as_bytes());
+        write!(buffer, "{}", self.tree).expect("[UNREACHABLE]: write to `Vec` failed");
 
         buffer.extend_from_slice(b"\nauthor ");
         self.author.encode_mut(buffer);
@@ -42,7 +42,7 @@ impl Commit {
     }
 
     pub fn len(&self) -> usize {
-        5 + self.tree.as_bytes().len()
+        5 + self.tree.as_bytes().len() * 2
             + 8
             + self.author.len()
             + 11
