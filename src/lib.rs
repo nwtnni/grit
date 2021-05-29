@@ -1,7 +1,7 @@
-pub mod db;
+pub mod database;
 pub mod object;
-pub mod ws;
+pub mod workspace;
 
-pub use db::Database;
+pub use database::Database;
 pub use object::Object;
-pub use ws::Workspace;
+pub use workspace::Workspace;
