@@ -83,7 +83,7 @@ fn main() -> anyhow::Result<()> {
 
             let workspace = grit::Workspace::new(root);
             let database = grit::Database::new(&git)?;
-            let reference = grit::Reference::new(git);
+            let reference = grit::Reference::new(&git);
 
             let mut nodes = Vec::new();
 

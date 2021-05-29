@@ -13,7 +13,7 @@ pub struct Reference {
 }
 
 impl Reference {
-    pub fn new(git: path::PathBuf) -> Self {
+    pub fn new(git: &path::Path) -> Self {
         Reference {
             root: git.join("refs"),
             head: git.join("HEAD"),
