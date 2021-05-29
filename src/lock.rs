@@ -1,5 +1,6 @@
 use std::fs;
 use std::io;
+use std::mem;
 use std::ops;
 use std::path;
 
@@ -13,12 +14,12 @@ pub struct File {
 
 impl File {
     pub fn new(path: path::PathBuf) -> io::Result<Self> {
-        let path = match path.is_file() {
-            true => path
+        let path = match path.file_name() {
+            Some(_) => path
                 .into_os_string()
                 .tap_mut(|path| path.push(".lock"))
                 .tap(path::PathBuf::from),
-            false => {
+            None => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     format!("Expected path to file, but got {}", path.display()),
@@ -50,6 +51,26 @@ impl File {
             file: Some(file),
         })
     }
+
+    pub fn commit(mut self) -> io::Result<()> {
+        mem::take(&mut self.file);
+        fs::rename(&self.path, &self.path.with_extension(""))?;
+
+        // Once we've successfully renamed the file, we want to avoid running our
+        // destructor in case some other process has created the lock file in
+        // between the `rename` and `drop` calls:
+        //
+        // - P0: acquire lock
+        // - P0: fs::rename
+        // - P1: acquire lock
+        // - P0: mem::drop
+        //
+        // But in all other (error) paths, we **do** want to run the destructor so
+        // that the lock is always released. Essentially, we want `rename` XOR `remove`.
+        mem::take(&mut self.path);
+        mem::forget(self);
+        Ok(())
+    }
 }
 
 impl ops::Deref for File {
@@ -71,7 +92,22 @@ impl ops::DerefMut for File {
 
 impl Drop for File {
     fn drop(&mut self) {
-        self.file.take();
-        fs::rename(&self.path, &self.path.with_extension("")).expect("Failed to rename lock file");
+        // If `fs::rename` fails during `File::commit`, then it's possible that we've
+        // already dropped `self.file`, but still need to remove `self.path` anyway,
+        // which is why this is **not** in a conditional:
+        //
+        // ```
+        // if let Some(_) = self.file.take() {
+        //     fs::remove_file(&self.path).ok();
+        // }
+        // ```
+        mem::take(&mut self.file);
+        match fs::remove_file(&self.path) {
+            Ok(()) => (),
+            error => error.expect(&format!(
+                "Failed to release lock file: {}",
+                self.path.display(),
+            )),
+        }
     }
 }
