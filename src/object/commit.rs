@@ -32,11 +32,11 @@ impl Commit {
 
     pub fn encode_mut(&self, buffer: &mut Vec<u8>) {
         buffer.extend_from_slice(b"tree ");
-        write!(buffer, "{}", self.tree).expect("[UNREACHABLE]: write to `Vec` failed");
+        self.tree.encode_mut(buffer);
 
         if let Some(parent) = self.parent {
             buffer.extend_from_slice(b"\nparent ");
-            write!(buffer, "{}", parent).expect("[UNREACHABLE]: write to `Vec` failed");
+            parent.encode_mut(buffer);
         }
 
         buffer.extend_from_slice(b"\nauthor ");

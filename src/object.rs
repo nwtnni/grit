@@ -1,5 +1,4 @@
 use std::fmt;
-use std::fmt::Write as _;
 use std::io;
 use std::io::Write as _;
 use std::path;
@@ -70,7 +69,7 @@ impl Id {
         // Strip trailing newline
         let bytes = bytes.strip_suffix(&[b'\n']).unwrap_or(bytes);
 
-        if bytes.len() != 40 || bytes.iter().any(|byte| DECODE[*byte as usize] == 255) {
+        if bytes.len() != 40 || bytes.iter().any(|byte| HEX_DECODE[*byte as usize] == 255) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
@@ -84,31 +83,44 @@ impl Id {
         let mut id = [0u8; 20];
 
         for (source, target) in bytes.chunks(2).zip(&mut id) {
-            let hi = DECODE[source[0] as usize];
-            let lo = DECODE[source[1] as usize];
-            *target = hi << 4 | lo;
+            *target = hex_decode(source);
         }
 
         Ok(Id(id))
     }
 
     pub fn directory(&self) -> path::PathBuf {
-        path::PathBuf::from(format!("{:02x}", self.0[0]))
+        let mut buffer = String::with_capacity(2);
+        let (hi, lo) = hex_encode(self.0[0]);
+        buffer.push(hi as char);
+        buffer.push(lo as char);
+        path::PathBuf::from(buffer)
     }
 
     pub fn file_name(&self) -> path::PathBuf {
-        let mut buffer = String::new();
+        let mut buffer = String::with_capacity(38);
         for byte in &self.0[1..] {
-            write!(&mut buffer, "{:02x}", byte).expect("[UNREACHABLE]: write to `String` failed");
+            let (hi, lo) = hex_encode(*byte);
+            buffer.push(hi as char);
+            buffer.push(lo as char);
         }
         path::PathBuf::from(buffer)
+    }
+
+    pub fn encode_mut(&self, buffer: &mut Vec<u8>) {
+        for byte in &self.0 {
+            let (hi, lo) = hex_encode(*byte);
+            buffer.push(hi as u8);
+            buffer.push(lo as u8);
+        }
     }
 }
 
 impl fmt::Display for Id {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         for byte in &self.0 {
-            write!(fmt, "{:02x}", byte)?;
+            let (hi, lo) = hex_encode(*byte);
+            write!(fmt, "{}{}", hi as char, lo as char)?;
         }
         Ok(())
     }
@@ -120,7 +132,23 @@ impl<T: AsRef<[u8]>> From<T> for Id {
     }
 }
 
-static DECODE: [u8; 256] = [
+fn hex_encode(byte: u8) -> (u8, u8) {
+    let hi = byte >> 4;
+    let lo = byte & 0b1111;
+    (HEX_ENCODE[hi as usize], HEX_ENCODE[lo as usize])
+}
+
+fn hex_decode(code: &[u8]) -> u8 {
+    let hi = HEX_DECODE[code[0] as usize];
+    let lo = HEX_DECODE[code[1] as usize];
+    hi << 4 | lo
+}
+
+static HEX_ENCODE: [u8; 16] = [
+    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
+];
+
+static HEX_DECODE: [u8; 256] = [
     255, // 0x00
     255, // 0x01
     255, // 0x02
