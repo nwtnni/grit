@@ -23,6 +23,11 @@ impl Database {
         let id = object::Id::from(&data);
         let path = self.root.join(id.to_path_buf());
 
+        // Object has already been written to disk.
+        if path.exists() {
+            return Ok(id);
+        }
+
         let mut file = file::Temp::new(path)?;
         let mut stream =
             flate2::write::ZlibEncoder::new(&mut **file, flate2::Compression::default());
