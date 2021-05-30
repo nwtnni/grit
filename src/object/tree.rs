@@ -1,5 +1,7 @@
 use std::cmp;
+use std::fs;
 use std::os::unix::ffi::OsStrExt as _;
+use std::os::unix::fs::PermissionsExt as _;
 use std::path;
 
 use crate::object;
@@ -9,8 +11,7 @@ use crate::object;
 pub struct Tree(Vec<Node>);
 
 impl Tree {
-    pub fn new(mut nodes: Vec<Node>) -> Self {
-        nodes.sort();
+    pub fn new(nodes: Vec<Node>) -> Self {
         Tree(nodes)
     }
 
@@ -37,12 +38,16 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(path: path::PathBuf, id: object::Id, mode: u32) -> Self {
+    pub fn new(path: path::PathBuf, id: object::Id, meta: fs::Metadata) -> Self {
         Node {
             path,
             id,
-            mode: Mode::from(mode),
+            mode: Mode::from(meta),
         }
+    }
+
+    pub fn id(&self) -> &object::Id {
+        &self.id
     }
 
     fn encode_mut(&self, buffer: &mut Vec<u8>) {
@@ -74,6 +79,7 @@ impl Ord for Node {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Mode {
+    Directory,
     Regular,
     Executable,
 }
@@ -81,6 +87,7 @@ enum Mode {
 impl Mode {
     fn encode_mut(&self, buffer: &mut Vec<u8>) {
         match self {
+            Mode::Directory => buffer.extend_from_slice(b"40000"),
             Mode::Regular => buffer.extend_from_slice(b"100644"),
             Mode::Executable => buffer.extend_from_slice(b"100755"),
         }
@@ -88,18 +95,21 @@ impl Mode {
 
     fn len(&self) -> usize {
         match self {
+            Mode::Directory => 5,
             Mode::Regular => 6,
             Mode::Executable => 6,
         }
     }
 }
 
-impl From<u32> for Mode {
-    fn from(mode: u32) -> Self {
-        if mode & 0o111 == 0 {
-            Mode::Regular
-        } else {
+impl From<fs::Metadata> for Mode {
+    fn from(meta: fs::Metadata) -> Self {
+        if meta.file_type().is_dir() {
+            Mode::Directory
+        } else if meta.permissions().mode() & 0o111 > 0 {
             Mode::Executable
+        } else {
+            Mode::Regular
         }
     }
 }

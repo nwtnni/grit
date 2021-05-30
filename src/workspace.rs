@@ -1,5 +1,7 @@
 use std::path;
 
+use crate::util::Tap as _;
+
 #[derive(Debug)]
 pub struct Workspace {
     root: path::PathBuf,
@@ -13,15 +15,21 @@ impl Workspace {
     pub fn root(&self) -> &path::Path {
         &self.root
     }
+}
 
-    pub fn files(&self) -> impl Iterator<Item = anyhow::Result<path::PathBuf>> {
+impl IntoIterator for &'_ Workspace {
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+    type Item = walkdir::Result<walkdir::DirEntry>;
+    fn into_iter(self) -> Self::IntoIter {
+        let git = self.root.join(".git");
         walkdir::WalkDir::new(&self.root)
-            .max_depth(1)
+            .contents_first(true)
+            .sort_by_file_name()
             .into_iter()
-            .filter_map(|entry| match entry {
-                Err(error) => Some(Err(anyhow::Error::from(error))),
-                Ok(entry) if entry.file_type().is_file() => Some(Ok(entry.into_path())),
-                Ok(_) => None,
+            .filter(move |entry| match entry {
+                Ok(entry) => !entry.path().starts_with(&git),
+                Err(_) => true,
             })
+            .tap(Box::new)
     }
 }
