@@ -13,17 +13,14 @@ use structopt::StructOpt;
 
 #[derive(StructOpt)]
 enum Command {
-    Init(Init),
+    Add(Add),
     Commit(Commit),
+    Init(Init),
 }
 
-/// Initialize a new git repository.
 #[derive(StructOpt)]
-struct Init {
-    /// Path to directory to initialize.
-    ///
-    /// Default to current working directory if not provided.
-    root: Option<path::PathBuf>,
+struct Add {
+    path: path::PathBuf,
 }
 
 #[derive(StructOpt)]
@@ -38,30 +35,21 @@ struct Commit {
     message: Option<String>,
 }
 
+/// Initialize a new git repository.
+#[derive(StructOpt)]
+struct Init {
+    /// Path to directory to initialize.
+    ///
+    /// Default to current working directory if not provided.
+    root: Option<path::PathBuf>,
+}
+
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     match Command::from_args() {
-        Command::Init(Init { root }) => {
-            let root = match root {
-                None => env::current_dir()?,
-                Some(root) => {
-                    fs::create_dir_all(&root)?;
-                    root.canonicalize()?
-                }
-            };
-
-            let mut path = root.join(".git");
-
-            for directory in &["objects", "refs"] {
-                path.push(directory);
-                fs::create_dir_all(&path)?;
-                path.pop();
-            }
-
-            log::info!("Initialized empty git repository at `{}`", root.display());
-
-            Ok(())
+        Command::Add(Add { path: _ }) => {
+            todo!()
         }
         Command::Commit(Commit {
             author_name,
@@ -146,6 +134,27 @@ fn main() -> anyhow::Result<()> {
                 commit_id,
                 commit_header
             );
+
+            Ok(())
+        }
+        Command::Init(Init { root }) => {
+            let root = match root {
+                None => env::current_dir()?,
+                Some(root) => {
+                    fs::create_dir_all(&root)?;
+                    root.canonicalize()?
+                }
+            };
+
+            let mut path = root.join(".git");
+
+            for directory in &["objects", "refs"] {
+                path.push(directory);
+                fs::create_dir_all(&path)?;
+                path.pop();
+            }
+
+            log::info!("Initialized empty git repository at `{}`", root.display());
 
             Ok(())
         }
