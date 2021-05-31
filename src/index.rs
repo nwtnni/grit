@@ -1,4 +1,5 @@
 use std::cmp;
+use std::collections::BTreeSet;
 use std::convert::TryFrom;
 use std::fs;
 use std::io;
@@ -32,7 +33,7 @@ impl Index {
         Ok(Lock {
             index: self,
             lock: file::Lock::new(path)?,
-            entries: Vec::new(),
+            entries: BTreeSet::new(),
         })
     }
 }
@@ -41,12 +42,12 @@ pub struct Lock<'index> {
     #[allow(unused)]
     index: &'index mut Index,
     lock: file::Lock,
-    entries: Vec<Entry>,
+    entries: BTreeSet<Entry>,
 }
 
 impl<'index> Lock<'index> {
     pub fn push(&mut self, meta: fs::Metadata, id: object::Id, path: path::PathBuf) {
-        self.entries.push(Entry::new(meta, id, path));
+        self.entries.insert(Entry::new(meta, id, path));
     }
 
     pub fn commit(mut self) -> io::Result<()> {
@@ -78,7 +79,7 @@ impl<'index> Lock<'index> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     meta: Metadata,
     id: object::Id,
@@ -116,7 +117,23 @@ impl Entry {
     }
 }
 
-#[derive(Clone, Debug)]
+impl PartialOrd for Entry {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Entry {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.path
+            .cmp(&other.path)
+            .then_with(|| self.id.cmp(&other.id))
+            .then_with(|| self.meta.cmp(&other.meta))
+            .then_with(|| self.flag.cmp(&other.flag))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Metadata {
     /// Change time (whole seconds)
     ctime: u32,
