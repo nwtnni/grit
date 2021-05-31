@@ -48,8 +48,25 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     match Command::from_args() {
-        Command::Add(Add { path: _ }) => {
-            todo!()
+        Command::Add(Add { path }) => {
+            let root = env::current_dir()?;
+            let git = root.join(".git");
+
+            let database = grit::Database::new(&git)?;
+            let mut index = grit::Index::new(&git);
+
+            let blob = fs::read(&path)
+                .map(object::Blob::new)
+                .map(Object::Blob)?;
+
+            let meta = path.metadata()?;
+            let id = database.store(&blob)?;
+
+            let mut index = index.lock()?;
+            index.push(meta, id, path);
+            index.commit()?;
+
+            Ok(())
         }
         Command::Commit(Commit {
             author_name,

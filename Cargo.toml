@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+byteorder = "1.4"
 chrono = "0.4"
 env_logger = "0.8"
 flate2 = "1.0"
