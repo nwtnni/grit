@@ -20,7 +20,7 @@ enum Command {
 
 #[derive(StructOpt)]
 struct Add {
-    path: path::PathBuf,
+    paths: Vec<path::PathBuf>,
 }
 
 #[derive(StructOpt)]
@@ -48,24 +48,26 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     match Command::from_args() {
-        Command::Add(Add { path }) => {
+        Command::Add(Add { paths }) => {
             let root = env::current_dir()?;
             let git = root.join(".git");
 
             let database = grit::Database::new(&git)?;
             let mut index = grit::Index::new(&git);
-
-            let blob = fs::read(&path)
-                .map(object::Blob::new)
-                .map(Object::Blob)?;
-
-            let meta = path.metadata()?;
-            let id = database.store(&blob)?;
-
             let mut index = index.lock()?;
-            index.push(meta, id, path);
-            index.commit()?;
 
+            for path in paths {
+                let meta = path.metadata()?;
+                let blob = fs::read(&path)
+                    .map(object::Blob::new)
+                    .map(Object::Blob)?;
+
+                let id = database.store(&blob)?;
+
+                index.push(meta, id, path);
+            }
+
+            index.commit()?;
             Ok(())
         }
         Command::Commit(Commit {
