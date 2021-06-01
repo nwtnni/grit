@@ -7,8 +7,8 @@ use std::path;
 use grit::object;
 use grit::object::commit;
 use grit::object::tree;
-use grit::Object;
 use grit::util::Tap as _;
+use grit::Object;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -58,9 +58,7 @@ fn main() -> anyhow::Result<()> {
 
             for path in paths {
                 let meta = path.metadata()?;
-                let blob = fs::read(&path)
-                    .map(object::Blob::new)
-                    .map(Object::Blob)?;
+                let blob = fs::read(&path).map(object::Blob::new).map(Object::Blob)?;
 
                 let id = database.store(&blob)?;
 
@@ -96,7 +94,7 @@ fn main() -> anyhow::Result<()> {
             let mut stack = Vec::new();
             let mut count = Vec::new();
 
-            for entry in &workspace {
+            for entry in workspace.walk(".") {
                 let entry = entry?;
                 let path = entry.path();
                 let meta = path.metadata()?;
