@@ -126,7 +126,9 @@ impl PartialOrd for Entry {
 impl Ord for Entry {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.path
-            .cmp(&other.path)
+            .as_os_str()
+            .as_bytes()
+            .cmp(other.path.as_os_str().as_bytes())
             .then_with(|| self.id.cmp(&other.id))
             .then_with(|| self.meta.cmp(&other.meta))
             .then_with(|| self.flag.cmp(&other.flag))

@@ -52,17 +52,33 @@ fn main() -> anyhow::Result<()> {
             let root = env::current_dir()?;
             let git = root.join(".git");
 
+            let workspace = grit::Workspace::new(root);
             let database = grit::Database::new(&git)?;
             let mut index = grit::Index::new(&git);
             let mut index = index.lock()?;
 
             for path in paths {
-                let meta = path.metadata()?;
-                let blob = fs::read(&path).map(object::Blob::new).map(Object::Blob)?;
+                for entry in workspace.walk(&path) {
+                    let entry = entry?;
 
-                let id = database.store(&blob)?;
+                    if entry.file_type().is_dir() {
+                        continue;
+                    }
 
-                index.push(meta, id, path);
+                    let meta = entry.metadata()?;
+                    let blob = fs::read(entry.path())
+                        .map(object::Blob::new)
+                        .map(Object::Blob)?;
+
+                    let id = database.store(&blob)?;
+                    let relative = entry
+                        .into_path()
+                        .strip_prefix(workspace.root())
+                        .expect("[UNREACHABLE]: entry must be inside workspace")
+                        .to_path_buf();
+
+                    index.push(meta, id, relative);
+                }
             }
 
             index.commit()?;
