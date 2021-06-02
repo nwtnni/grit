@@ -1,6 +1,7 @@
 pub mod database;
 mod file;
 pub mod index;
+pub mod meta;
 pub mod object;
 pub mod reference;
 pub mod util;

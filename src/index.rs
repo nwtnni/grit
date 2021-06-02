@@ -1,18 +1,17 @@
 use std::cmp;
 use std::collections::BTreeSet;
-use std::convert::TryFrom;
+use std::convert::TryFrom as _;
 use std::fs;
 use std::io;
 use std::io::Write as _;
-use std::num;
 use std::os::unix::ffi::OsStrExt as _;
-use std::os::unix::fs::MetadataExt as _;
 use std::path;
 
 use byteorder::BigEndian;
 use byteorder::WriteBytesExt as _;
 
 use crate::file;
+use crate::meta;
 use crate::object;
 use crate::util::Tap as _;
 
@@ -81,7 +80,7 @@ impl<'index> Lock<'index> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
-    meta: Metadata,
+    meta: meta::Data,
     id: object::Id,
     flag: u16,
     path: path::PathBuf,
@@ -89,7 +88,8 @@ pub struct Entry {
 
 impl Entry {
     pub fn new(meta: fs::Metadata, id: object::Id, path: path::PathBuf) -> Self {
-        let meta = Metadata::try_from(meta).expect("[INTERNAL ERROR]: failed to convert metadata");
+        let meta =
+            meta::Data::try_from(meta).expect("[INTERNAL ERROR]: failed to convert metadata");
         let flag = cmp::min(0xFFF, path.as_os_str().as_bytes().len()) as u16;
         Entry {
             meta,
@@ -132,71 +132,5 @@ impl Ord for Entry {
             .then_with(|| self.id.cmp(&other.id))
             .then_with(|| self.meta.cmp(&other.meta))
             .then_with(|| self.flag.cmp(&other.flag))
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Metadata {
-    /// Change time (whole seconds)
-    ctime: u32,
-    /// Change time (fractional nanoseconds)
-    ctime_nsec: u32,
-    /// Modified time (whole seconds)
-    mtime: u32,
-    /// Modified time (fractional nanoseconds)
-    mtime_nsec: u32,
-    /// Device ID
-    dev: u32,
-    /// `inode` number
-    ino: u32,
-    /// Permission mode
-    mode: u32,
-    /// User ID
-    uid: u32,
-    /// Group ID
-    gid: u32,
-    /// File size (bytes)
-    size: u32,
-}
-
-impl Metadata {
-    fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
-        writer.write_u32::<BigEndian>(self.ctime)?;
-        writer.write_u32::<BigEndian>(self.ctime_nsec)?;
-        writer.write_u32::<BigEndian>(self.mtime)?;
-        writer.write_u32::<BigEndian>(self.mtime_nsec)?;
-        writer.write_u32::<BigEndian>(self.dev)?;
-        writer.write_u32::<BigEndian>(self.ino)?;
-        writer.write_u32::<BigEndian>(self.mode)?;
-        writer.write_u32::<BigEndian>(self.uid)?;
-        writer.write_u32::<BigEndian>(self.gid)?;
-        writer.write_u32::<BigEndian>(self.size)?;
-        Ok(())
-    }
-
-    fn len(&self) -> usize {
-        40
-    }
-}
-
-impl TryFrom<fs::Metadata> for Metadata {
-    type Error = num::TryFromIntError;
-    fn try_from(meta: fs::Metadata) -> Result<Self, Self::Error> {
-        Ok(Metadata {
-            ctime: meta.ctime().tap(u32::try_from)?,
-            ctime_nsec: meta.ctime_nsec().tap(u32::try_from)?,
-            mtime: meta.mtime().tap(u32::try_from)?,
-            mtime_nsec: meta.mtime_nsec().tap(u32::try_from)?,
-            dev: meta.dev().tap(u32::try_from)?,
-            ino: meta.ino().tap(u32::try_from)?,
-            mode: if meta.mode() & 0o111 > 0 {
-                0o100755
-            } else {
-                0o100644
-            },
-            uid: meta.uid(),
-            gid: meta.gid(),
-            size: meta.size().tap(u32::try_from)?,
-        })
     }
 }
