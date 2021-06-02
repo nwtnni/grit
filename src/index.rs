@@ -45,7 +45,7 @@ pub struct Lock<'index> {
 }
 
 impl<'index> Lock<'index> {
-    pub fn push(&mut self, meta: fs::Metadata, id: object::Id, path: path::PathBuf) {
+    pub fn push(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
         self.entries.insert(Entry::new(meta, id, path));
     }
 
@@ -87,7 +87,7 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn new(meta: fs::Metadata, id: object::Id, path: path::PathBuf) -> Self {
+    pub fn new(meta: &fs::Metadata, id: object::Id, path: path::PathBuf) -> Self {
         let meta =
             meta::Data::try_from(meta).expect("[INTERNAL ERROR]: failed to convert metadata");
         let flag = cmp::min(0xFFF, path.as_os_str().as_bytes().len()) as u16;

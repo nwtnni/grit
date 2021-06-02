@@ -77,7 +77,7 @@ fn main() -> anyhow::Result<()> {
                         .expect("[UNREACHABLE]: entry must be inside workspace")
                         .to_path_buf();
 
-                    index.push(meta, id, relative);
+                    index.push(&meta, id, relative);
                 }
             }
 
@@ -142,7 +142,7 @@ fn main() -> anyhow::Result<()> {
                 };
 
                 let id = database.store(&object)?;
-                let node = tree::Node::new(name, id, meta);
+                let node = tree::Node::new(name, id, &meta);
                 stack.push(node);
                 count.last_mut().map(|count| *count += 1);
             }

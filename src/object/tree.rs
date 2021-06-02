@@ -1,9 +1,9 @@
 use std::cmp;
 use std::fs;
 use std::os::unix::ffi::OsStrExt as _;
-use std::os::unix::fs::PermissionsExt as _;
 use std::path;
 
+use crate::meta;
 use crate::object;
 
 // Invariant: sorted
@@ -34,15 +34,15 @@ impl Tree {
 pub struct Node {
     path: path::PathBuf,
     id: object::Id,
-    mode: Mode,
+    mode: meta::Mode,
 }
 
 impl Node {
-    pub fn new(path: path::PathBuf, id: object::Id, meta: fs::Metadata) -> Self {
+    pub fn new(path: path::PathBuf, id: object::Id, meta: &fs::Metadata) -> Self {
         Node {
             path,
             id,
-            mode: Mode::from(meta),
+            mode: meta::Mode::from(meta),
         }
     }
 
@@ -51,7 +51,7 @@ impl Node {
     }
 
     fn encode_mut(&self, buffer: &mut Vec<u8>) {
-        self.mode.encode_mut(buffer);
+        buffer.extend_from_slice(self.mode.as_str().as_bytes());
         buffer.push(b' ');
         buffer.extend_from_slice(self.path.as_os_str().as_bytes());
         buffer.push(0);
@@ -59,7 +59,11 @@ impl Node {
     }
 
     fn len(&self) -> usize {
-        self.mode.len() + 1 + self.path.as_os_str().as_bytes().len() + 1 + self.id.as_bytes().len()
+        self.mode.as_str().len()
+            + 1
+            + self.path.as_os_str().as_bytes().len()
+            + 1
+            + self.id.as_bytes().len()
     }
 }
 
@@ -74,42 +78,5 @@ impl Ord for Node {
         self.path
             .cmp(&other.path)
             .then_with(|| self.id.cmp(&other.id))
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum Mode {
-    Directory,
-    Regular,
-    Executable,
-}
-
-impl Mode {
-    fn encode_mut(&self, buffer: &mut Vec<u8>) {
-        match self {
-            Mode::Directory => buffer.extend_from_slice(b"40000"),
-            Mode::Regular => buffer.extend_from_slice(b"100644"),
-            Mode::Executable => buffer.extend_from_slice(b"100755"),
-        }
-    }
-
-    fn len(&self) -> usize {
-        match self {
-            Mode::Directory => 5,
-            Mode::Regular => 6,
-            Mode::Executable => 6,
-        }
-    }
-}
-
-impl From<fs::Metadata> for Mode {
-    fn from(meta: fs::Metadata) -> Self {
-        if meta.file_type().is_dir() {
-            Mode::Directory
-        } else if meta.permissions().mode() & 0o111 > 0 {
-            Mode::Executable
-        } else {
-            Mode::Regular
-        }
     }
 }
