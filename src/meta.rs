@@ -1,4 +1,6 @@
 use std::convert;
+use std::error;
+use std::fmt;
 use std::fs;
 use std::io;
 use std::num;
@@ -94,6 +96,33 @@ impl Mode {
             Mode::Directory => 0o040000,
             Mode::Regular => 0o100644,
             Mode::Executable => 0o100755,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct InvalidMode(u32);
+
+impl fmt::Display for InvalidMode {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmt,
+            "Invalid mode {:#o}, expected 0o040000 or 0o100644 or 0o100755",
+            self.0,
+        )
+    }
+}
+
+impl error::Error for InvalidMode {}
+
+impl convert::TryFrom<u32> for Mode {
+    type Error = InvalidMode;
+    fn try_from(mode: u32) -> Result<Self, Self::Error> {
+        match mode {
+            0o040000 => Ok(Mode::Directory),
+            0o100644 => Ok(Mode::Regular),
+            0o100755 => Ok(Mode::Executable),
+            invalid => Err(InvalidMode(invalid)),
         }
     }
 }
