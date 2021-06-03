@@ -49,32 +49,29 @@ impl<'index> Lock<'index> {
         self.entries.insert(Entry::new(meta, id, path));
     }
 
-    pub fn commit(mut self) -> io::Result<()> {
+    pub fn commit(self) -> io::Result<()> {
         let len = self
             .entries
             .len()
             .tap(u32::try_from)
             .expect("[INTERNAL ERROR]: more than 2^32 - 1 entries");
 
-        let mut hash = sha1::Sha1::new();
         let mut buffer = Vec::new();
         let mut cursor = io::Cursor::new(&mut buffer);
+        let mut checksum = file::Checksum::new(self.lock);
 
         cursor.write_all(b"DIRC")?;
         cursor.write_u32::<BigEndian>(2)?;
         cursor.write_u32::<BigEndian>(len)?;
-        hash.update(&buffer);
-        self.lock.write_all(&buffer)?;
+        checksum.write_all(&buffer)?;
 
         for entry in &self.entries {
             buffer.clear();
             entry.write(io::Cursor::new(&mut buffer))?;
-            hash.update(&buffer);
-            self.lock.write_all(&buffer)?;
+            checksum.write_all(&buffer)?;
         }
 
-        self.lock.write_all(&hash.digest().bytes())?;
-        self.lock.commit()
+        checksum.write_checksum()?.commit()
     }
 }
 

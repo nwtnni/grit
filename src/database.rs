@@ -29,8 +29,7 @@ impl Database {
         }
 
         let mut file = file::Temp::new(path)?;
-        let mut stream =
-            flate2::write::ZlibEncoder::new(&mut **file, flate2::Compression::default());
+        let mut stream = flate2::write::ZlibEncoder::new(&mut file, flate2::Compression::default());
 
         stream.write_all(&data)?;
         stream.finish()?;

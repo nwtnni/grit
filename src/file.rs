@@ -1,13 +1,85 @@
 use std::fs;
 use std::io;
 use std::mem;
-use std::ops;
 use std::path;
 
 use rand::distributions;
 use rand::Rng as _;
+use sha1::Sha1;
 
 use crate::util::Tap as _;
+
+pub struct Checksum<T> {
+    inner: T,
+    hash: Sha1,
+}
+
+impl<T> Checksum<T> {
+    pub fn new(inner: T) -> Self {
+        Checksum {
+            inner,
+            hash: Sha1::new(),
+        }
+    }
+
+    pub fn clear_checksum(&mut self) {
+        self.hash.reset()
+    }
+}
+
+impl<T: io::Read> io::Read for Checksum<T> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let len = self.inner.read(buffer)?;
+        self.hash.update(&buffer[..len]);
+        Ok(len)
+    }
+}
+
+impl<T: io::Read> Checksum<T> {
+    pub fn verify_checksum(mut self) -> io::Result<T> {
+        let mut buffer = [0u8; 20];
+
+        self.inner.read_exact(&mut buffer)?;
+
+        if buffer != self.hash.digest().bytes() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Expected checksum {:?}, but found checksum {:?}",
+                    buffer,
+                    self.hash.digest().bytes(),
+                ),
+            ));
+        }
+
+        match self.inner.read(&mut buffer)? {
+            0 => Ok(self.inner),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Unexpected byte after checksum: {:?}", buffer[0]),
+            )),
+        }
+    }
+}
+
+impl<T: io::Write> io::Write for Checksum<T> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.hash.update(buffer);
+        self.inner.write(buffer)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+impl<T: io::Write> Checksum<T> {
+    pub fn write_checksum(mut self) -> io::Result<T> {
+        let digest = self.hash.digest().bytes();
+        self.inner.write_all(&digest)?;
+        Ok(self.inner)
+    }
+}
 
 #[derive(Debug)]
 pub struct Temp(Atomic);
@@ -38,16 +110,13 @@ impl Temp {
     }
 }
 
-impl ops::Deref for Temp {
-    type Target = Atomic;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl io::Write for Temp {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.0.write(buffer)
     }
-}
 
-impl ops::DerefMut for Temp {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
     }
 }
 
@@ -74,16 +143,13 @@ impl Lock {
     }
 }
 
-impl ops::Deref for Lock {
-    type Target = Atomic;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl io::Write for Lock {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.0.write(buffer)
     }
-}
 
-impl ops::DerefMut for Lock {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
     }
 }
 
@@ -157,19 +223,18 @@ impl Drop for Atomic {
     }
 }
 
-impl ops::Deref for Atomic {
-    type Target = fs::File;
-    fn deref(&self) -> &Self::Target {
-        self.file
-            .as_ref()
-            .expect("[UNREACHABLE]: missing underlying file")
-    }
-}
-
-impl ops::DerefMut for Atomic {
-    fn deref_mut(&mut self) -> &mut Self::Target {
+impl io::Write for Atomic {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
         self.file
             .as_mut()
-            .expect("[UNREACHABLE]: missing underlying file")
+            .expect("[UNREACHABLE]: missing `Atomic` file")
+            .write(buffer)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.file
+            .as_mut()
+            .expect("[UNREACHABLE]: missing `Atomic` file")
+            .flush()
     }
 }
