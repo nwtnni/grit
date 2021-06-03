@@ -27,6 +27,16 @@ impl<T> Checksum<T> {
     }
 }
 
+impl<T: io::BufRead> io::BufRead for Checksum<T> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.inner.fill_buf()
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.inner.consume(amount)
+    }
+}
+
 impl<T: io::Read> io::Read for Checksum<T> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         let len = self.inner.read(buffer)?;
@@ -159,7 +169,7 @@ impl WriteLock {
         match reader {
             None => Ok(Lock::Write(self)),
             Some(reader) => Ok(Lock::ReadWrite(ReadWriteLock {
-                reader: Some(reader),
+                reader: Some(io::BufReader::new(reader)),
                 writer: self.0,
             })),
         }
@@ -182,7 +192,7 @@ impl io::Write for WriteLock {
 
 #[derive(Debug)]
 pub struct ReadWriteLock {
-    reader: Option<fs::File>,
+    reader: Option<io::BufReader<fs::File>>,
     writer: Atomic,
 }
 
@@ -190,6 +200,22 @@ impl ReadWriteLock {
     pub fn commit(mut self) -> io::Result<()> {
         mem::take(&mut self.reader);
         self.writer.commit()
+    }
+}
+
+impl io::BufRead for ReadWriteLock {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.reader
+            .as_mut()
+            .expect("[UNREACHABLE]: missing `ReadWriteLock` file")
+            .fill_buf()
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.reader
+            .as_mut()
+            .expect("[UNREACHABLE]: missing `ReadWriteLock` file")
+            .consume(amount)
     }
 }
 
