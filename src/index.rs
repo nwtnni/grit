@@ -31,7 +31,7 @@ impl Index {
         let path = self.path.clone();
         Ok(Lock {
             index: self,
-            lock: file::Lock::new(path)?,
+            lock: file::WriteLock::new(path)?,
             entries: BTreeSet::new(),
         })
     }
@@ -40,7 +40,7 @@ impl Index {
 pub struct Lock<'index> {
     #[allow(unused)]
     index: &'index mut Index,
-    lock: file::Lock,
+    lock: file::WriteLock,
     entries: BTreeSet<Entry>,
 }
 

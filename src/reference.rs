@@ -21,7 +21,7 @@ impl Reference {
     }
 
     pub fn set_head(&self, id: &object::Id) -> io::Result<()> {
-        let mut head = file::Lock::new(self.head.clone())?;
+        let mut head = file::WriteLock::new(self.head.clone())?;
         write!(&mut head, "{}", id)?;
         head.commit()
     }

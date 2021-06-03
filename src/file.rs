@@ -121,9 +121,15 @@ impl io::Write for Temp {
 }
 
 #[derive(Debug)]
-pub struct Lock(Atomic);
+pub enum Lock {
+    Write(WriteLock),
+    ReadWrite(ReadWriteLock),
+}
 
-impl Lock {
+#[derive(Debug)]
+pub struct WriteLock(Atomic);
+
+impl WriteLock {
     pub fn new(target: path::PathBuf) -> io::Result<Self> {
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)?;
@@ -138,18 +144,71 @@ impl Lock {
         Atomic::new(source, target).map(Self)
     }
 
+    pub fn read(self) -> io::Result<Lock> {
+        let reader = match fs::OpenOptions::new()
+            .read(true)
+            .write(false)
+            .create(false)
+            .open(&self.0.target)
+        {
+            Ok(file) => Some(file),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error),
+        };
+
+        match reader {
+            None => Ok(Lock::Write(self)),
+            Some(reader) => Ok(Lock::ReadWrite(ReadWriteLock {
+                reader: Some(reader),
+                writer: self.0,
+            })),
+        }
+    }
+
     pub fn commit(self) -> io::Result<()> {
         self.0.commit()
     }
 }
 
-impl io::Write for Lock {
+impl io::Write for WriteLock {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
         self.0.write(buffer)
     }
 
     fn flush(&mut self) -> io::Result<()> {
         self.0.flush()
+    }
+}
+
+#[derive(Debug)]
+pub struct ReadWriteLock {
+    reader: Option<fs::File>,
+    writer: Atomic,
+}
+
+impl ReadWriteLock {
+    pub fn commit(mut self) -> io::Result<()> {
+        mem::take(&mut self.reader);
+        self.writer.commit()
+    }
+}
+
+impl io::Read for ReadWriteLock {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.reader
+            .as_mut()
+            .expect("[UNREACHABLE]: missing `ReadWriteLock` file")
+            .read(buffer)
+    }
+}
+
+impl io::Write for ReadWriteLock {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.writer.write(buffer)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
     }
 }
 
