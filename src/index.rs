@@ -97,20 +97,23 @@ impl Entry {
     }
 
     fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
-        let path = self.path.as_os_str().as_bytes();
-
-        let len = self.meta.len() + self.id.as_bytes().len() + 2 + path.len();
-        let pad = 0b1000 - (len & 0b0111);
-
         self.meta.write(&mut writer)?;
         writer.write_all(self.id.as_bytes())?;
         writer.write_u16::<BigEndian>(self.flag)?;
-        writer.write_all(path)?;
-        for _ in 0..pad {
+        writer.write_all(self.path.as_os_str().as_bytes())?;
+        for _ in 0..self.padding() {
             writer.write_u8(0)?;
         }
 
         Ok(())
+    }
+
+    fn len(&self) -> usize {
+        self.meta.len() + self.id.as_bytes().len() + 2 + self.path.as_os_str().as_bytes().len()
+    }
+
+    fn padding(&self) -> usize {
+        0b1000 - (self.len() & 0b0111)
     }
 }
 
