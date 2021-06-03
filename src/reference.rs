@@ -1,5 +1,5 @@
-use std::fs;
 use std::io;
+use std::io::Read as _;
 use std::io::Write as _;
 use std::path;
 
@@ -27,10 +27,13 @@ impl Reference {
     }
 
     pub fn head(&self) -> io::Result<Option<object::Id>> {
-        match fs::read(&self.head).and_then(|bytes| object::Id::from_bytes(&bytes)) {
-            Ok(id) => Ok(Some(id)),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error),
-        }
+        let mut head = match file::WriteLock::new(self.head.clone())?.read()? {
+            file::Lock::ReadWrite(lock) => lock,
+            file::Lock::Write(_) => return Ok(None),
+        };
+
+        let mut buffer = [0u8; 40];
+        head.read_exact(&mut buffer)?;
+        object::Id::from_hex(&buffer).map(Option::Some)
     }
 }

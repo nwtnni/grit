@@ -67,25 +67,21 @@ impl Id {
         &self.0
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> io::Result<Self> {
-        // Strip trailing newline
-        let bytes = bytes.strip_suffix(&[b'\n']).unwrap_or(bytes);
-
-        if bytes.len() != 40 || bytes.iter().any(|byte| HEX_DECODE[*byte as usize] == 255) {
+    pub fn from_hex(hex: &[u8; 40]) -> io::Result<Self> {
+        if hex.iter().any(|byte| HEX_DECODE[*byte as usize] == 255) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
                     "Expected 40 hexadecimal characters, but found {}: {:02x?}",
-                    bytes.len(),
-                    bytes,
+                    hex.len(),
+                    hex,
                 ),
             ));
         }
 
         let mut id = [0u8; 20];
 
-        bytes
-            .chunks(2)
+        hex.chunks(2)
             .zip(&mut id)
             .for_each(|(source, target)| *target = hex_decode(source));
 
