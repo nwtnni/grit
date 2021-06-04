@@ -1,5 +1,4 @@
 use std::io;
-use std::io::Read as _;
 use std::io::Write as _;
 use std::path;
 
@@ -32,8 +31,6 @@ impl Reference {
             file::Lock::Write(_) => return Ok(None),
         };
 
-        let mut buffer = [0u8; 40];
-        head.read_exact(&mut buffer)?;
-        object::Id::from_hex(&buffer).map(Option::Some)
+        object::Id::read_hex(&mut head).map(Option::Some)
     }
 }

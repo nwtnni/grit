@@ -67,21 +67,25 @@ impl Id {
         Ok(Self(buffer))
     }
 
-    pub fn from_hex(hex: &[u8; 40]) -> io::Result<Self> {
-        if hex.iter().any(|byte| HEX_DECODE[*byte as usize] == 255) {
+    pub fn read_hex<R: io::Read>(reader: &mut R) -> io::Result<Self> {
+        let mut buffer = [0u8; 40];
+        reader.read_exact(&mut buffer)?;
+
+        if buffer.iter().any(|byte| HEX_DECODE[*byte as usize] == 255) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
                     "Expected 40 hexadecimal characters, but found {}: {:02x?}",
-                    hex.len(),
-                    hex,
+                    buffer.len(),
+                    buffer,
                 ),
             ));
         }
 
         let mut id = [0u8; 20];
 
-        hex.chunks(2)
+        buffer
+            .chunks(2)
             .zip(&mut id)
             .for_each(|(source, target)| *target = hex_decode(source));
 
