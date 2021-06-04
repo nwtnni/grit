@@ -39,7 +39,7 @@ pub struct Data {
 }
 
 impl Data {
-    pub fn read<R: io::Read>(mut reader: R) -> io::Result<Self> {
+    pub fn read<R: io::Read>(reader: &mut R) -> io::Result<Self> {
         Ok(Data {
             ctime: reader.read_u32::<BigEndian>()?,
             ctime_nsec: reader.read_u32::<BigEndian>()?,
@@ -57,7 +57,7 @@ impl Data {
         })
     }
 
-    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+    pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_u32::<BigEndian>(self.ctime)?;
         writer.write_u32::<BigEndian>(self.ctime_nsec)?;
         writer.write_u32::<BigEndian>(self.mtime)?;

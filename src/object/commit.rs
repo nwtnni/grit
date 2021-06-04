@@ -30,20 +30,20 @@ impl Commit {
         &self.message
     }
 
-    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+    pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(b"tree ")?;
-        self.tree.write(&mut writer)?;
+        self.tree.write(writer)?;
 
         if let Some(parent) = self.parent {
             writer.write_all(b"\nparent ")?;
-            parent.write(&mut writer)?;
+            parent.write(writer)?;
         }
 
         writer.write_all(b"\nauthor ")?;
-        self.author.write(&mut writer)?;
+        self.author.write(writer)?;
 
         writer.write_all(b"\ncommitter ")?;
-        self.author.write(&mut writer)?;
+        self.author.write(writer)?;
 
         writer.write_all(b"\n\n")?;
         writer.write_all(self.message.as_bytes())
@@ -81,7 +81,7 @@ impl Author {
         Author { name, email, time }
     }
 
-    fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+    fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(self.name.as_bytes())?;
         writer.write_all(b" <")?;
         writer.write_all(self.email.as_bytes())?;

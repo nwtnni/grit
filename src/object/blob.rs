@@ -8,7 +8,7 @@ impl Blob {
         Blob(data)
     }
 
-    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+    pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(&self.0)
     }
 

@@ -20,8 +20,8 @@ impl Database {
 
     pub fn store(&self, object: &Object) -> io::Result<object::Id> {
         let mut buffer = Vec::new();
-        let cursor = io::Cursor::new(&mut buffer);
-        object.write(cursor)?;
+        let mut cursor = io::Cursor::new(&mut buffer);
+        object.write(&mut cursor)?;
 
         let id = object::Id::from(&buffer);
         let path = self.root.join(id.to_path_buf());

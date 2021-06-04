@@ -23,16 +23,16 @@ pub enum Object {
 }
 
 impl Object {
-    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+    pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(self.r#type().as_bytes())?;
         writer.write_all(b" ")?;
 
-        write!(&mut writer, "{}\0", self.len())?;
+        write!(writer, "{}\0", self.len())?;
 
         match self {
-            Object::Blob(blob) => blob.write(&mut writer),
-            Object::Commit(commit) => commit.write(&mut writer),
-            Object::Tree(tree) => tree.write(&mut writer),
+            Object::Blob(blob) => blob.write(writer),
+            Object::Commit(commit) => commit.write(writer),
+            Object::Tree(tree) => tree.write(writer),
         }
     }
 
@@ -61,7 +61,7 @@ impl Id {
         &self.0
     }
 
-    pub fn read_bytes<R: io::Read>(mut reader: R) -> io::Result<Self> {
+    pub fn read_bytes<R: io::Read>(reader: &mut R) -> io::Result<Self> {
         let mut buffer = [0u8; 20];
         reader.read_exact(&mut buffer)?;
         Ok(Self(buffer))
@@ -102,7 +102,7 @@ impl Id {
         path::PathBuf::from(buffer)
     }
 
-    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+    pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         self.0
             .iter()
             .copied()

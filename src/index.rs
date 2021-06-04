@@ -108,7 +108,8 @@ impl Index {
 
         for entry in &self.entries {
             buffer.clear();
-            entry.write(io::Cursor::new(&mut buffer))?;
+            let mut cursor = io::Cursor::new(&mut buffer);
+            entry.write(&mut cursor)?;
             self.lock.write_all(&buffer)?;
         }
 
@@ -137,9 +138,9 @@ impl Entry {
         }
     }
 
-    fn read<R: io::Read>(mut reader: R) -> io::Result<Self> {
-        let meta = meta::Data::read(&mut reader)?;
-        let id = object::Id::read_bytes(&mut reader)?;
+    fn read<R: io::Read>(reader: &mut R) -> io::Result<Self> {
+        let meta = meta::Data::read(reader)?;
+        let id = object::Id::read_bytes(reader)?;
         let flag = reader.read_u16::<BigEndian>()?;
 
         let mut buffer = Vec::new();
@@ -161,8 +162,8 @@ impl Entry {
         })
     }
 
-    fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
-        self.meta.write(&mut writer)?;
+    fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+        self.meta.write(writer)?;
         writer.write_all(self.id.as_bytes())?;
         writer.write_u16::<BigEndian>(self.flag)?;
         writer.write_all(self.path.as_os_str().as_bytes())?;

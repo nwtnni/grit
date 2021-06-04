@@ -16,8 +16,8 @@ impl Tree {
         Tree(nodes)
     }
 
-    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
-        self.0.iter().try_for_each(|node| node.write(&mut writer))
+    pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+        self.0.iter().try_for_each(|node| node.write(writer))
     }
 
     pub fn r#type(&self) -> &'static str {
@@ -49,7 +49,7 @@ impl Node {
         &self.id
     }
 
-    fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+    fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(self.mode.as_str().as_bytes())?;
         writer.write_all(b" ")?;
         writer.write_all(self.path.as_os_str().as_bytes())?;
