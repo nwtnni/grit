@@ -27,7 +27,7 @@ impl Reference {
     }
 
     pub fn head(&self) -> io::Result<Option<object::Id>> {
-        let mut head = match file::WriteLock::new(self.head.clone())?.read()? {
+        let mut head = match file::WriteLock::new(self.head.clone())?.upgrade()? {
             file::Lock::ReadWrite(lock) => lock,
             file::Lock::Write(_) => return Ok(None),
         };

@@ -67,6 +67,12 @@ impl Id {
         &self.0
     }
 
+    pub fn read_bytes<R: io::Read>(mut reader: R) -> io::Result<Self> {
+        let mut buffer = [0u8; 20];
+        reader.read_exact(&mut buffer)?;
+        Ok(Self(buffer))
+    }
+
     pub fn from_hex(hex: &[u8; 40]) -> io::Result<Self> {
         if hex.iter().any(|byte| HEX_DECODE[*byte as usize] == 255) {
             return Err(io::Error::new(

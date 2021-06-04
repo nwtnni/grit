@@ -154,7 +154,7 @@ impl WriteLock {
         Atomic::new(source, target).map(Self)
     }
 
-    pub fn read(self) -> io::Result<Lock> {
+    pub fn upgrade(self) -> io::Result<Lock> {
         let reader = match fs::OpenOptions::new()
             .read(true)
             .write(false)
@@ -197,6 +197,10 @@ pub struct ReadWriteLock {
 }
 
 impl ReadWriteLock {
+    pub fn downgrade(self) -> WriteLock {
+        WriteLock(self.writer)
+    }
+
     pub fn commit(mut self) -> io::Result<()> {
         mem::take(&mut self.reader);
         self.writer.commit()

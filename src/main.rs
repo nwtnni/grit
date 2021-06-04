@@ -54,8 +54,7 @@ fn main() -> anyhow::Result<()> {
 
             let workspace = grit::Workspace::new(root);
             let database = grit::Database::new(&git)?;
-            let mut index = grit::Index::new(&git);
-            let mut index = index.lock()?;
+            let mut index = grit::Index::lock(&git)?;
 
             for path in paths {
                 for entry in workspace.walk(&path) {
@@ -77,7 +76,7 @@ fn main() -> anyhow::Result<()> {
                         .expect("[UNREACHABLE]: entry must be inside workspace")
                         .to_path_buf();
 
-                    index.push(&meta, id, relative);
+                    index.insert(&meta, id, relative);
                 }
             }
 

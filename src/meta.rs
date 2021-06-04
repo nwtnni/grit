@@ -1,4 +1,5 @@
 use std::convert;
+use std::convert::TryFrom as _;
 use std::error;
 use std::fmt;
 use std::fs;
@@ -8,6 +9,7 @@ use std::os::unix::fs::MetadataExt as _;
 use std::os::unix::fs::PermissionsExt as _;
 
 use byteorder::BigEndian;
+use byteorder::ReadBytesExt as _;
 use byteorder::WriteBytesExt as _;
 
 use crate::util::Tap as _;
@@ -37,6 +39,24 @@ pub struct Data {
 }
 
 impl Data {
+    pub fn read<R: io::Read>(mut reader: R) -> io::Result<Self> {
+        Ok(Data {
+            ctime: reader.read_u32::<BigEndian>()?,
+            ctime_nsec: reader.read_u32::<BigEndian>()?,
+            mtime: reader.read_u32::<BigEndian>()?,
+            mtime_nsec: reader.read_u32::<BigEndian>()?,
+            dev: reader.read_u32::<BigEndian>()?,
+            ino: reader.read_u32::<BigEndian>()?,
+            mode: reader
+                .read_u32::<BigEndian>()?
+                .tap(Mode::try_from)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?,
+            uid: reader.read_u32::<BigEndian>()?,
+            gid: reader.read_u32::<BigEndian>()?,
+            size: reader.read_u32::<BigEndian>()?,
+        })
+    }
+
     pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
         writer.write_u32::<BigEndian>(self.ctime)?;
         writer.write_u32::<BigEndian>(self.ctime_nsec)?;

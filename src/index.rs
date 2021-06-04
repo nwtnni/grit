@@ -1,13 +1,17 @@
 use std::cmp;
 use std::collections::BTreeSet;
 use std::convert::TryFrom as _;
+use std::ffi;
 use std::fs;
 use std::io;
+use std::io::Read as _;
 use std::io::Write as _;
 use std::os::unix::ffi::OsStrExt as _;
+use std::os::unix::ffi::OsStringExt as _;
 use std::path;
 
 use byteorder::BigEndian;
+use byteorder::ReadBytesExt as _;
 use byteorder::WriteBytesExt as _;
 
 use crate::file;
@@ -15,41 +19,79 @@ use crate::meta;
 use crate::object;
 use crate::util::Tap as _;
 
-#[derive(Debug)]
 pub struct Index {
-    path: path::PathBuf,
+    lock: file::Checksum<file::WriteLock>,
+    entries: BTreeSet<Entry>,
+    changed: bool,
 }
 
 impl Index {
-    pub fn new(git: &path::Path) -> Self {
-        Index {
-            path: git.join("index"),
-        }
-    }
+    pub fn lock(git: &path::Path) -> io::Result<Self> {
+        let path = git.join("index");
+        let lock = file::WriteLock::new(path)?.upgrade()?;
 
-    pub fn lock(&mut self) -> io::Result<Lock> {
-        let path = self.path.clone();
-        Ok(Lock {
-            index: self,
-            lock: file::WriteLock::new(path)?,
-            entries: BTreeSet::new(),
+        let (entries, lock) = match lock {
+            file::Lock::Write(lock) => (BTreeSet::new(), file::Checksum::new(lock)),
+            file::Lock::ReadWrite(lock) => {
+                let mut lock = file::Checksum::new(lock);
+
+                let mut header = [0u8; 4];
+                lock.read_exact(&mut header)?;
+                if &header != b"DIRC" {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Expected `DIRC` signature bytes, but found {:?}", header),
+                    ));
+                }
+
+                let version = lock.read_u32::<BigEndian>()?;
+                if version != 2 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Expected version 2, but found {}", version),
+                    ));
+                }
+
+                let count = match lock.read_u32::<BigEndian>()?.tap(usize::try_from) {
+                    Ok(count) => count,
+                    Err(error) => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("Entry count does not fit in u32: {}", error),
+                        ))
+                    }
+                };
+
+                let mut entries = BTreeSet::new();
+                for _ in 0..count {
+                    entries.insert(Entry::read(&mut lock)?);
+                }
+
+                let lock = lock
+                    .verify_checksum()?
+                    .tap(file::ReadWriteLock::downgrade)
+                    .tap(file::Checksum::new);
+
+                (entries, lock)
+            }
+        };
+
+        Ok(Index {
+            lock,
+            entries,
+            changed: false,
         })
     }
-}
 
-pub struct Lock<'index> {
-    #[allow(unused)]
-    index: &'index mut Index,
-    lock: file::WriteLock,
-    entries: BTreeSet<Entry>,
-}
-
-impl<'index> Lock<'index> {
-    pub fn push(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
-        self.entries.insert(Entry::new(meta, id, path));
+    pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
+        self.changed |= self.entries.insert(Entry::new(meta, id, path));
     }
 
-    pub fn commit(self) -> io::Result<()> {
+    pub fn commit(mut self) -> io::Result<()> {
+        if !self.changed {
+            return Ok(());
+        }
+
         let len = self
             .entries
             .len()
@@ -58,20 +100,19 @@ impl<'index> Lock<'index> {
 
         let mut buffer = Vec::new();
         let mut cursor = io::Cursor::new(&mut buffer);
-        let mut checksum = file::Checksum::new(self.lock);
 
         cursor.write_all(b"DIRC")?;
         cursor.write_u32::<BigEndian>(2)?;
         cursor.write_u32::<BigEndian>(len)?;
-        checksum.write_all(&buffer)?;
+        self.lock.write_all(&buffer)?;
 
         for entry in &self.entries {
             buffer.clear();
             entry.write(io::Cursor::new(&mut buffer))?;
-            checksum.write_all(&buffer)?;
+            self.lock.write_all(&buffer)?;
         }
 
-        checksum.write_checksum()?.commit()
+        self.lock.write_checksum()?.commit()
     }
 }
 
@@ -94,6 +135,30 @@ impl Entry {
             flag,
             path,
         }
+    }
+
+    fn read<R: io::Read>(mut reader: R) -> io::Result<Self> {
+        let meta = meta::Data::read(&mut reader)?;
+        let id = object::Id::read_bytes(&mut reader)?;
+        let flag = reader.read_u16::<BigEndian>()?;
+
+        let mut buffer = Vec::new();
+        reader.by_ref().take(2).read_to_end(&mut buffer)?;
+
+        while !buffer.ends_with(&[0]) {
+            reader.by_ref().take(8).read_to_end(&mut buffer)?;
+        }
+
+        while buffer.ends_with(&[0]) {
+            buffer.pop();
+        }
+
+        Ok(Self {
+            meta,
+            id,
+            flag,
+            path: buffer.tap(ffi::OsString::from_vec).tap(path::PathBuf::from),
+        })
     }
 
     fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
