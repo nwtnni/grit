@@ -1,3 +1,5 @@
+use std::io;
+
 #[derive(Clone, Debug)]
 pub struct Blob(Vec<u8>);
 
@@ -6,8 +8,8 @@ impl Blob {
         Blob(data)
     }
 
-    pub fn encode_mut(&self, buffer: &mut Vec<u8>) {
-        buffer.extend_from_slice(&self.0);
+    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+        writer.write_all(&self.0)
     }
 
     pub fn r#type(&self) -> &'static str {

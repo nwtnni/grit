@@ -30,23 +30,23 @@ impl Commit {
         &self.message
     }
 
-    pub fn encode_mut(&self, buffer: &mut Vec<u8>) {
-        buffer.extend_from_slice(b"tree ");
-        self.tree.encode_mut(buffer);
+    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+        writer.write_all(b"tree ")?;
+        self.tree.write(&mut writer)?;
 
         if let Some(parent) = self.parent {
-            buffer.extend_from_slice(b"\nparent ");
-            parent.encode_mut(buffer);
+            writer.write_all(b"\nparent ")?;
+            parent.write(&mut writer)?;
         }
 
-        buffer.extend_from_slice(b"\nauthor ");
-        self.author.encode_mut(buffer);
+        writer.write_all(b"\nauthor ")?;
+        self.author.write(&mut writer)?;
 
-        buffer.extend_from_slice(b"\ncommitter ");
-        self.author.encode_mut(buffer);
+        writer.write_all(b"\ncommitter ")?;
+        self.author.write(&mut writer)?;
 
-        buffer.extend_from_slice(b"\n\n");
-        buffer.extend_from_slice(self.message.as_bytes());
+        writer.write_all(b"\n\n")?;
+        writer.write_all(self.message.as_bytes())
     }
 
     pub fn r#type(&self) -> &'static str {
@@ -81,15 +81,12 @@ impl Author {
         Author { name, email, time }
     }
 
-    fn encode_mut(&self, buffer: &mut Vec<u8>) {
-        buffer.extend_from_slice(self.name.as_bytes());
-        buffer.extend_from_slice(b" <");
-
-        buffer.extend_from_slice(self.email.as_bytes());
-        buffer.extend_from_slice(b"> ");
-
-        write!(buffer, "{}", self.time.format("%s %z"))
-            .expect("[UNREACHABLE]: write to `Vec` failed");
+    fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+        writer.write_all(self.name.as_bytes())?;
+        writer.write_all(b" <")?;
+        writer.write_all(self.email.as_bytes())?;
+        writer.write_all(b"> ")?;
+        write!(writer, "{}", self.time.format("%s %z"))
     }
 
     fn len(&self) -> usize {

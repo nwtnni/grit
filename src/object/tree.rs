@@ -1,5 +1,6 @@
 use std::cmp;
 use std::fs;
+use std::io;
 use std::os::unix::ffi::OsStrExt as _;
 use std::path;
 
@@ -15,10 +16,8 @@ impl Tree {
         Tree(nodes)
     }
 
-    pub fn encode_mut(&self, buffer: &mut Vec<u8>) {
-        for node in &self.0 {
-            node.encode_mut(buffer);
-        }
+    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+        self.0.iter().try_for_each(|node| node.write(&mut writer))
     }
 
     pub fn r#type(&self) -> &'static str {
@@ -50,12 +49,12 @@ impl Node {
         &self.id
     }
 
-    fn encode_mut(&self, buffer: &mut Vec<u8>) {
-        buffer.extend_from_slice(self.mode.as_str().as_bytes());
-        buffer.push(b' ');
-        buffer.extend_from_slice(self.path.as_os_str().as_bytes());
-        buffer.push(0);
-        buffer.extend_from_slice(self.id.as_bytes());
+    fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+        writer.write_all(self.mode.as_str().as_bytes())?;
+        writer.write_all(b" ")?;
+        writer.write_all(self.path.as_os_str().as_bytes())?;
+        writer.write_all(b"\0")?;
+        writer.write_all(self.id.as_bytes())
     }
 
     fn len(&self) -> usize {

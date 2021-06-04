@@ -19,8 +19,11 @@ impl Database {
     }
 
     pub fn store(&self, object: &Object) -> io::Result<object::Id> {
-        let data = object.encode();
-        let id = object::Id::from(&data);
+        let mut buffer = Vec::new();
+        let cursor = io::Cursor::new(&mut buffer);
+        object.write(cursor)?;
+
+        let id = object::Id::from(&buffer);
         let path = self.root.join(id.to_path_buf());
 
         // Object has already been written to disk.
@@ -31,7 +34,7 @@ impl Database {
         let mut file = file::Temp::new(path)?;
         let mut stream = flate2::write::ZlibEncoder::new(&mut file, flate2::Compression::default());
 
-        stream.write_all(&data)?;
+        stream.write_all(&buffer)?;
         stream.finish()?;
         file.commit()?;
 

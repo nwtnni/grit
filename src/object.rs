@@ -2,7 +2,6 @@
 
 use std::fmt;
 use std::io;
-use std::io::Write as _;
 use std::path;
 use std::str;
 
@@ -24,22 +23,17 @@ pub enum Object {
 }
 
 impl Object {
-    pub fn encode(&self) -> Vec<u8> {
-        let mut buffer = Vec::new();
+    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+        writer.write_all(self.r#type().as_bytes())?;
+        writer.write_all(b" ")?;
 
-        buffer.extend_from_slice(self.r#type().as_bytes());
-        buffer.push(b' ');
-
-        write!(&mut buffer, "{}", self.len()).expect("[UNREACHABLE]: write to `Vec` failed");
-        buffer.push(0);
+        write!(&mut writer, "{}\0", self.len())?;
 
         match self {
-            Object::Blob(blob) => blob.encode_mut(&mut buffer),
-            Object::Commit(commit) => commit.encode_mut(&mut buffer),
-            Object::Tree(tree) => tree.encode_mut(&mut buffer),
+            Object::Blob(blob) => blob.write(&mut writer),
+            Object::Commit(commit) => commit.write(&mut writer),
+            Object::Tree(tree) => tree.write(&mut writer),
         }
-
-        buffer
     }
 
     fn r#type(&self) -> &'static str {
@@ -108,12 +102,12 @@ impl Id {
         path::PathBuf::from(buffer)
     }
 
-    pub fn encode_mut(&self, buffer: &mut Vec<u8>) {
-        for byte in &self.0 {
-            let (hi, lo) = hex_encode(*byte);
-            buffer.push(hi as u8);
-            buffer.push(lo as u8);
-        }
+    pub fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
+        self.0
+            .iter()
+            .copied()
+            .map(hex_encode)
+            .try_for_each(|(hi, lo)| writer.write_all(&[hi as u8, lo as u8]))
     }
 }
 
