@@ -34,44 +34,11 @@ impl Index {
             file::Lock::Write(lock) => (BTreeSet::new(), file::Checksum::new(lock)),
             file::Lock::ReadWrite(lock) => {
                 let mut lock = file::Checksum::new(lock);
-
-                let mut header = [0u8; 4];
-                lock.read_exact(&mut header)?;
-                if &header != b"DIRC" {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("Expected `DIRC` signature bytes, but found {:?}", header),
-                    ));
-                }
-
-                let version = lock.read_u32::<BigEndian>()?;
-                if version != 2 {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("Expected version 2, but found {}", version),
-                    ));
-                }
-
-                let count = match lock.read_u32::<BigEndian>()?.tap(usize::try_from) {
-                    Ok(count) => count,
-                    Err(error) => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!("Entry count does not fit in u32: {}", error),
-                        ))
-                    }
-                };
-
-                let mut entries = BTreeSet::new();
-                for _ in 0..count {
-                    entries.insert(Entry::read(&mut lock)?);
-                }
-
+                let entries = Self::read(&mut lock)?;
                 let lock = lock
                     .verify_checksum()?
                     .tap(file::ReadWriteLock::downgrade)
                     .tap(file::Checksum::new);
-
                 (entries, lock)
             }
         };
@@ -81,6 +48,42 @@ impl Index {
             entries,
             changed: false,
         })
+    }
+
+    fn read<R: io::Read>(reader: &mut R) -> io::Result<BTreeSet<Entry>> {
+        let mut header = [0u8; 4];
+        reader.read_exact(&mut header)?;
+        if &header != b"DIRC" {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Expected `DIRC` signature bytes, but found {:?}", header),
+            ));
+        }
+
+        let version = reader.read_u32::<BigEndian>()?;
+        if version != 2 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Expected version 2, but found {}", version),
+            ));
+        }
+
+        let count = match reader.read_u32::<BigEndian>()?.tap(usize::try_from) {
+            Ok(count) => count,
+            Err(error) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Entry count does not fit in u32: {}", error),
+                ))
+            }
+        };
+
+        let mut entries = BTreeSet::new();
+        for _ in 0..count {
+            entries.insert(Entry::read(reader)?);
+        }
+
+        Ok(entries)
     }
 
     pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
