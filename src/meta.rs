@@ -39,6 +39,10 @@ pub struct Data {
 }
 
 impl Data {
+    pub fn mode(&self) -> &Mode {
+        &self.mode
+    }
+
     pub fn read<R: io::Read>(reader: &mut R) -> io::Result<Self> {
         Ok(Data {
             ctime: reader.read_u32::<BigEndian>()?,

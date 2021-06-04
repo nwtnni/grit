@@ -1,5 +1,7 @@
 use std::cmp;
+use std::collections::btree_set;
 use std::collections::BTreeSet;
+use std::collections::VecDeque;
 use std::convert::TryFrom as _;
 use std::ffi;
 use std::fs;
@@ -111,6 +113,133 @@ impl Index {
     }
 }
 
+impl<'a> IntoIterator for &'a Index {
+    type IntoIter = Iter<'a>;
+    type Item = Node<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        Iter::new(&self.entries)
+    }
+}
+
+/// Iterator over both files and directories represented in the index, in sorted
+/// order. Directory contents will be yielded before the directory itself.
+#[derive(Debug)]
+pub struct Iter<'a> {
+    iter: btree_set::Iter<'a, Entry>,
+    state: Option<State<'a>>,
+    queue: VecDeque<&'a path::Path>,
+}
+
+impl<'a> Iter<'a> {
+    fn new(entries: &'a BTreeSet<Entry>) -> Self {
+        let mut iter = entries.iter();
+        let state = iter.next().map(State::Yield);
+        Iter {
+            iter,
+            state,
+            queue: VecDeque::new(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+enum State<'a> {
+    Yield(&'a Entry),
+    Yielded(&'a Entry),
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum Node<'a> {
+    File(&'a Entry),
+    Directory(&'a path::Path),
+}
+
+impl<'a> Node<'a> {
+    pub fn path(&self) -> &'a path::Path {
+        match self {
+            Node::File(entry) => entry.path(),
+            Node::Directory(path) => path,
+        }
+    }
+
+    pub fn mode(&self) -> &meta::Mode {
+        match self {
+            Node::File(entry) => entry.metadata().mode(),
+            Node::Directory(_) => &meta::Mode::Directory,
+        }
+    }
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = Node<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        // First, yield any available directories.
+        if let Some(directory) = self.queue.pop_front() {
+            return Some(Node::Directory(directory));
+        }
+
+        // Otherwise, if there is a file that has not been yielded, then yield it.
+        let prev = match self.state? {
+            State::Yielded(prev) => prev,
+            State::Yield(prev) => {
+                self.state = Some(State::Yielded(prev));
+                return Some(Node::File(prev));
+            }
+        };
+
+        // Finally, compare the previous and next file paths to determine what
+        // directories need to be yielded in between. Store these directories
+        // and the next file to yield.
+        let next = self.iter.next();
+
+        // Yield any ancestor directories that differ between the previous and next.
+        //
+        // If this is the last file remaining, then yield all of its ancestors,
+        // including the root ("").
+        //
+        // Examples:
+        //
+        // ```
+        // a / b / c / 1.txt
+        //   |
+        // a / d / c / e / 2.txt
+        //
+        // Yields:
+        //
+        // a / b / c
+        // a / b
+        //
+        // ---
+        //
+        // a / d / c / e / 2.txt
+        // a / d / c / e / f / 3.txt
+        //
+        // Yields nothing.
+        //
+        // ---
+        //
+        // a / d / c / e / f / 3.txt
+        // 4.txt
+        //
+        // Yields:
+        //
+        // a / d / c / e / f
+        // a / d / c / e
+        // a / d / c
+        // a / d
+        // a
+        // ```
+        prev.path
+            .ancestors()
+            .skip(1)
+            .take_while(|ancestor| next.map_or(true, |next| !next.path.starts_with(ancestor)))
+            .for_each(|ancestor| self.queue.push_back(ancestor));
+
+        self.state = next.map(State::Yield);
+        self.next()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     meta: meta::Data,
@@ -130,6 +259,18 @@ impl Entry {
             flag,
             path,
         }
+    }
+
+    pub fn metadata(&self) -> &meta::Data {
+        &self.meta
+    }
+
+    pub fn id(&self) -> &object::Id {
+        &self.id
+    }
+
+    pub fn path(&self) -> &path::Path {
+        &self.path
     }
 
     fn read<R: io::Read>(reader: &mut R) -> io::Result<Self> {

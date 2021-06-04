@@ -1,5 +1,4 @@
 use std::cmp;
-use std::fs;
 use std::io;
 use std::os::unix::ffi::OsStrExt as _;
 use std::path;
@@ -37,12 +36,8 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(path: path::PathBuf, id: object::Id, meta: &fs::Metadata) -> Self {
-        Node {
-            path,
-            id,
-            mode: meta::Mode::from(meta),
-        }
+    pub fn new(path: path::PathBuf, id: object::Id, mode: meta::Mode) -> Self {
+        Node { path, id, mode }
     }
 
     pub fn id(&self) -> &object::Id {

@@ -4,6 +4,7 @@ use std::io;
 use std::io::Read as _;
 use std::path;
 
+use grit::index;
 use grit::object;
 use grit::object::commit;
 use grit::object::tree;
@@ -102,46 +103,45 @@ fn main() -> anyhow::Result<()> {
             let root = env::current_dir()?;
             let git = root.join(".git");
 
-            let workspace = grit::Workspace::new(root);
             let database = grit::Database::new(&git)?;
             let reference = grit::Reference::new(&git);
+            let index = grit::Index::lock(&git)?;
 
             let mut stack = Vec::new();
             let mut count = Vec::new();
 
-            for entry in workspace.walk(".") {
-                let entry = entry?;
-                let path = entry.path();
-                let meta = path.metadata()?;
+            for node in &index {
+                let path = node.path();
+                let depth = path.components().count();
                 let name = path
                     .file_name()
-                    .expect("[UNREACHABLE]: file must have name")
+                    .unwrap_or_default()
                     .to_os_string()
                     .tap(path::PathBuf::from);
 
-                let depth = path
-                    .strip_prefix(workspace.root())
-                    .expect("[UNREACHABLE]: file must be in workspace")
-                    .components()
-                    .count();
-
-                let object = if meta.file_type().is_file() {
-                    count.resize(depth, 0);
-                    fs::read(&path).map(object::Blob::new).map(Object::Blob)?
-                } else if meta.file_type().is_dir() {
-                    count.resize(depth + 1, 0);
-                    let index = match count.pop() {
-                        None => unreachable!(),
-                        Some(0) => continue,
-                        Some(count) => stack.len() - count,
-                    };
-                    Object::Tree(object::Tree::new(stack.split_off(index)))
-                } else {
-                    unimplemented!("Unsupported file type: {:?}", meta.file_type());
+                let id = match node {
+                    index::Node::File(entry) => {
+                        count.resize(depth, 0);
+                        *entry.id()
+                    }
+                    index::Node::Directory(_) => {
+                        count.resize(depth + 1, 0);
+                        let index = match count.pop() {
+                            None => unreachable!(),
+                            Some(0) => continue,
+                            Some(count) => stack.len() - count,
+                        };
+                        stack
+                            .split_off(index)
+                            .tap(object::Tree::new)
+                            .tap(Object::Tree)
+                            .tap(|tree| database.store(&tree))?
+                    }
                 };
 
-                let id = database.store(&object)?;
-                let node = tree::Node::new(name, id, &meta);
+                let mode = node.mode();
+                let node = tree::Node::new(name, id, *mode);
+
                 stack.push(node);
                 count.last_mut().map(|count| *count += 1);
             }
