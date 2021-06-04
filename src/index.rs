@@ -101,21 +101,12 @@ impl Index {
             .tap(u32::try_from)
             .expect("[INTERNAL ERROR]: more than 2^32 - 1 entries");
 
-        let mut buffer = Vec::new();
-        let mut cursor = io::Cursor::new(&mut buffer);
-
-        cursor.write_all(b"DIRC")?;
-        cursor.write_u32::<BigEndian>(2)?;
-        cursor.write_u32::<BigEndian>(len)?;
-        self.lock.write_all(&buffer)?;
-
+        self.lock.write_all(b"DIRC")?;
+        self.lock.write_u32::<BigEndian>(2)?;
+        self.lock.write_u32::<BigEndian>(len)?;
         for entry in &self.entries {
-            buffer.clear();
-            let mut cursor = io::Cursor::new(&mut buffer);
-            entry.write(&mut cursor)?;
-            self.lock.write_all(&buffer)?;
+            entry.write(&mut self.lock)?;
         }
-
         self.lock.write_checksum()?.commit()
     }
 }
