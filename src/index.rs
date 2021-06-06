@@ -1,6 +1,6 @@
 use std::cmp;
-use std::collections::btree_set;
-use std::collections::BTreeSet;
+use std::collections::btree_map;
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::convert::TryFrom as _;
 use std::ffi;
@@ -23,7 +23,7 @@ use crate::util::Tap as _;
 
 pub struct Index {
     lock: file::Checksum<file::WriteLock>,
-    entries: BTreeSet<Entry>,
+    entries: BTreeMap<EntryKey, Entry>,
     changed: bool,
 }
 
@@ -33,7 +33,7 @@ impl Index {
         let lock = file::WriteLock::new(path)?.upgrade()?;
 
         let (entries, lock) = match lock {
-            file::Lock::Write(lock) => (BTreeSet::new(), file::Checksum::new(lock)),
+            file::Lock::Write(lock) => (BTreeMap::new(), file::Checksum::new(lock)),
             file::Lock::ReadWrite(lock) => {
                 let mut lock = file::Checksum::new(lock);
                 let entries = Self::read(&mut lock)?;
@@ -52,7 +52,7 @@ impl Index {
         })
     }
 
-    fn read<R: io::Read>(reader: &mut R) -> io::Result<BTreeSet<Entry>> {
+    fn read<R: io::Read>(reader: &mut R) -> io::Result<BTreeMap<EntryKey, Entry>> {
         let mut header = [0u8; 4];
         reader.read_exact(&mut header)?;
         if &header != b"DIRC" {
@@ -80,16 +80,20 @@ impl Index {
             }
         };
 
-        let mut entries = BTreeSet::new();
+        let mut entries = BTreeMap::new();
         for _ in 0..count {
-            entries.insert(Entry::read(reader)?);
+            let entry = Entry::read(reader)?;
+            let key = entry.path.to_path_buf().tap(EntryKey);
+            entries.insert(key, entry);
         }
 
         Ok(entries)
     }
 
     pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
-        self.changed |= self.entries.insert(Entry::new(meta, id, path));
+        let entry = Entry::new(meta, id, path);
+        let key = entry.path().to_path_buf().tap(EntryKey);
+        self.changed |= self.entries.insert(key, entry).is_none();
     }
 
     pub fn commit(mut self) -> io::Result<()> {
@@ -106,7 +110,7 @@ impl Index {
         self.lock.write_all(b"DIRC")?;
         self.lock.write_u32::<BigEndian>(2)?;
         self.lock.write_u32::<BigEndian>(len)?;
-        for entry in &self.entries {
+        for entry in self.entries.values() {
             entry.write(&mut self.lock)?;
         }
         self.lock.write_checksum()?.commit()
@@ -125,14 +129,14 @@ impl<'a> IntoIterator for &'a Index {
 /// order. Directory contents will be yielded before the directory itself.
 #[derive(Debug)]
 pub struct Iter<'a> {
-    iter: btree_set::Iter<'a, Entry>,
+    iter: btree_map::Values<'a, EntryKey, Entry>,
     state: Option<State<'a>>,
     queue: VecDeque<&'a path::Path>,
 }
 
 impl<'a> Iter<'a> {
-    fn new(entries: &'a BTreeSet<Entry>) -> Self {
-        let mut iter = entries.iter();
+    fn new(entries: &'a BTreeMap<EntryKey, Entry>) -> Self {
+        let mut iter = entries.values();
         let state = iter.next().map(State::Yield);
         Iter {
             iter,
@@ -241,6 +245,24 @@ impl<'a> Iterator for Iter<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+struct EntryKey(path::PathBuf);
+
+impl PartialOrd for EntryKey {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for EntryKey {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.0
+            .as_os_str()
+            .as_bytes()
+            .cmp(other.0.as_os_str().as_bytes())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     meta: meta::Data,
     id: object::Id,
@@ -315,23 +337,5 @@ impl Entry {
 
     fn padding(&self) -> usize {
         0b1000 - (self.len() & 0b0111)
-    }
-}
-
-impl PartialOrd for Entry {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Entry {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.path
-            .as_os_str()
-            .as_bytes()
-            .cmp(other.path.as_os_str().as_bytes())
-            .then_with(|| self.id.cmp(&other.id))
-            .then_with(|| self.meta.cmp(&other.meta))
-            .then_with(|| self.flag.cmp(&other.flag))
     }
 }
