@@ -19,11 +19,12 @@ use byteorder::WriteBytesExt as _;
 use crate::file;
 use crate::meta;
 use crate::object;
+use crate::util;
 use crate::util::Tap as _;
 
 pub struct Index {
     lock: file::Checksum<file::WriteLock>,
-    entries: BTreeMap<EntryKey, Entry>,
+    entries: BTreeMap<util::PathBuf, Entry>,
     changed: bool,
 }
 
@@ -52,7 +53,7 @@ impl Index {
         })
     }
 
-    fn read<R: io::Read>(reader: &mut R) -> io::Result<BTreeMap<EntryKey, Entry>> {
+    fn read<R: io::Read>(reader: &mut R) -> io::Result<BTreeMap<util::PathBuf, Entry>> {
         let mut header = [0u8; 4];
         reader.read_exact(&mut header)?;
         if &header != b"DIRC" {
@@ -83,7 +84,7 @@ impl Index {
         let mut entries = BTreeMap::new();
         for _ in 0..count {
             let entry = Entry::read(reader)?;
-            let key = entry.path.to_path_buf().tap(EntryKey);
+            let key = entry.path.to_path_buf().tap(util::PathBuf);
             entries.insert(key, entry);
         }
 
@@ -92,7 +93,7 @@ impl Index {
 
     pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
         let entry = Entry::new(meta, id, path);
-        let key = entry.path().to_path_buf().tap(EntryKey);
+        let key = entry.path().to_path_buf().tap(util::PathBuf);
         self.changed |= self.entries.insert(key, entry).is_none();
     }
 
@@ -129,13 +130,13 @@ impl<'a> IntoIterator for &'a Index {
 /// order. Directory contents will be yielded before the directory itself.
 #[derive(Debug)]
 pub struct Iter<'a> {
-    iter: btree_map::Values<'a, EntryKey, Entry>,
+    iter: btree_map::Values<'a, util::PathBuf, Entry>,
     state: Option<State<'a>>,
     queue: VecDeque<&'a path::Path>,
 }
 
 impl<'a> Iter<'a> {
-    fn new(entries: &'a BTreeMap<EntryKey, Entry>) -> Self {
+    fn new(entries: &'a BTreeMap<util::PathBuf, Entry>) -> Self {
         let mut iter = entries.values();
         let state = iter.next().map(State::Yield);
         Iter {
@@ -241,24 +242,6 @@ impl<'a> Iterator for Iter<'a> {
 
         self.state = next.map(State::Yield);
         self.next()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct EntryKey(path::PathBuf);
-
-impl PartialOrd for EntryKey {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for EntryKey {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.0
-            .as_os_str()
-            .as_bytes()
-            .cmp(other.0.as_os_str().as_bytes())
     }
 }
 
