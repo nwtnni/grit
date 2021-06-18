@@ -8,6 +8,7 @@ use std::fs;
 use std::io;
 use std::io::Read as _;
 use std::io::Write as _;
+use std::ops;
 use std::os::unix::ffi::OsStrExt as _;
 use std::os::unix::ffi::OsStringExt as _;
 use std::path;
@@ -31,9 +32,9 @@ pub struct Index {
 impl Index {
     pub fn lock(git: &path::Path) -> io::Result<Self> {
         let path = git.join("index");
-        let lock = file::WriteLock::new(path)?.upgrade()?;
+        let lock = file::WriteLock::new(path)?;
 
-        let (entries, lock) = match lock {
+        let (entries, lock) = match lock.upgrade()? {
             file::Lock::Write(lock) => (BTreeMap::new(), file::Checksum::new(lock)),
             file::Lock::ReadWrite(lock) => {
                 let mut lock = file::Checksum::new(lock);
@@ -93,8 +94,69 @@ impl Index {
 
     pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
         let entry = Entry::new(meta, id, path);
+
+        for ancestor in entry
+            .path()
+            .ancestors()
+            .skip(1)
+            .take_while(|ancestor| *ancestor != path::Path::new(""))
+            .map(util::Path)
+        {
+            if let Some(_) = self.entries.remove(&ancestor as &dyn util::Key) {
+                log::debug!("Removing conflicting ancestor: {}", ancestor.0.display());
+            }
+        }
+
+        for descendant in self
+            .descendants(entry.path())
+            .into_iter()
+            .map(util::PathBuf)
+        {
+            if let Some(_) = self.entries.remove(&descendant as &dyn util::Key) {
+                log::debug!(
+                    "Removing conflicting descendant: {}",
+                    descendant.0.display(),
+                );
+            }
+        }
+
         let key = entry.path().to_path_buf().tap(util::PathBuf);
         self.changed |= self.entries.insert(key, entry).is_none();
+    }
+
+    /// If `path` is a directory, then return all existing index entries
+    /// below it in the directory tree, exclduing `path` itself.
+    fn descendants(&self, path: &path::Path) -> Vec<path::PathBuf> {
+        self.entries
+            // We exclude the lower bound here instead of using a symmetric
+            // `.skip(1)` because `path` may or may not be in the index.
+            .range::<dyn util::Key, _>((
+                ops::Bound::Excluded(&util::Path(path) as &dyn util::Key),
+                ops::Bound::Unbounded,
+            ))
+            // Ignore sibling files that are byte-wise sorted after `path`,
+            // but before the descendant files. For example:
+            //
+            // ```
+            // foo <-- INSERT
+            // foo.sh
+            // foo/a.txt
+            // ```
+            //
+            // Here, we should remove `foo/a.txt`, but leave `foo.sh` alone.
+            .skip_while(|(util::PathBuf(successor), _)| {
+                successor
+                    .as_os_str()
+                    .as_bytes()
+                    .starts_with(path.as_os_str().as_bytes())
+                    && !successor.starts_with(path)
+            })
+            // All descendants must be consecutive in the sort order, as they all
+            // start with `<PATH>/`.
+            .take_while(|(util::PathBuf(successor), _)| successor.starts_with(path))
+            .map(|(_, entry)| entry.path())
+            .map(path::Path::to_path_buf)
+            .collect()
     }
 
     pub fn commit(mut self) -> io::Result<()> {
