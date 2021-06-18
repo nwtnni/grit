@@ -55,7 +55,7 @@ impl<T: io::Read> Checksum<T> {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "Expected checksum {:?}, but found checksum {:?}",
+                    "Expected checksum {:02x?}, but found checksum {:x?}",
                     buffer,
                     self.hash.digest().bytes(),
                 ),
