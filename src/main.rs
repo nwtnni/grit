@@ -4,6 +4,7 @@ use std::io;
 use std::io::Read as _;
 use std::path;
 
+use grit::command;
 use grit::index;
 use grit::object;
 use grit::object::commit;
@@ -14,14 +15,9 @@ use structopt::StructOpt;
 
 #[derive(StructOpt)]
 enum Command {
-    Add(Add),
+    Add(command::Add),
     Commit(Commit),
     Init(Init),
-}
-
-#[derive(StructOpt)]
-struct Add {
-    paths: Vec<path::PathBuf>,
 }
 
 #[derive(StructOpt)]
@@ -49,41 +45,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     match Command::from_args() {
-        Command::Add(Add { paths }) => {
-            let root = env::current_dir()?;
-            let git = root.join(".git");
-
-            let workspace = grit::Workspace::new(root);
-            let database = grit::Database::new(&git)?;
-            let mut index = grit::Index::lock(&git)?;
-
-            for path in paths {
-                for entry in workspace.walk(&path) {
-                    let entry = entry?;
-
-                    if entry.file_type().is_dir() {
-                        continue;
-                    }
-
-                    let meta = entry.metadata()?;
-                    let blob = fs::read(entry.path())
-                        .map(object::Blob::new)
-                        .map(Object::Blob)?;
-
-                    let id = database.store(&blob)?;
-                    let relative = entry
-                        .into_path()
-                        .strip_prefix(workspace.root())
-                        .expect("[UNREACHABLE]: entry must be inside workspace")
-                        .to_path_buf();
-
-                    index.insert(&meta, id, relative);
-                }
-            }
-
-            index.commit()?;
-            Ok(())
-        }
+        Command::Add(add) => add.run(),
         Command::Commit(Commit {
             author_name,
             author_email,
