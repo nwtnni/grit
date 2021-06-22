@@ -109,8 +109,10 @@ impl Index {
         entry
             .path()
             .tap(|path| self.descendants(path))
-            .into_iter()
+            .map(path::PathBuf::from)
             .map(util::PathBuf)
+            .collect::<Vec<_>>()
+            .into_iter()
             .filter_map(|descendant| self.entries.remove(&descendant as &dyn util::Key))
             .for_each(|entry| {
                 log::debug!(
@@ -125,7 +127,7 @@ impl Index {
 
     /// If `path` is a directory, then return all existing index entries
     /// below it in the directory tree, exclduing `path` itself.
-    fn descendants(&self, path: &path::Path) -> Vec<path::PathBuf> {
+    fn descendants<'a>(&'a self, path: &'a path::Path) -> impl Iterator<Item = &path::Path> + 'a {
         self.entries
             // We exclude the lower bound here instead of using a symmetric
             // `.skip(1)` because `path` may or may not be in the index.
@@ -143,7 +145,7 @@ impl Index {
             // ```
             //
             // Here, we should remove `foo/a.txt`, but leave `foo.sh` alone.
-            .skip_while(|(util::PathBuf(successor), _)| {
+            .skip_while(move |(util::PathBuf(successor), _)| {
                 successor
                     .as_os_str()
                     .as_bytes()
@@ -152,10 +154,8 @@ impl Index {
             })
             // All descendants must be consecutive in the sort order, as they all
             // start with `<PATH>/`.
-            .take_while(|(util::PathBuf(successor), _)| successor.starts_with(path))
+            .take_while(move |(util::PathBuf(successor), _)| successor.starts_with(path))
             .map(|(_, entry)| entry.path())
-            .map(path::Path::to_path_buf)
-            .collect()
     }
 
     pub fn commit(mut self) -> io::Result<()> {
