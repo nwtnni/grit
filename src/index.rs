@@ -95,30 +95,29 @@ impl Index {
     pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
         let entry = Entry::new(meta, id, path);
 
-        for ancestor in entry
+        entry
             .path()
             .ancestors()
             .skip(1)
             .take_while(|ancestor| *ancestor != path::Path::new(""))
             .map(util::Path)
-        {
-            if let Some(_) = self.entries.remove(&ancestor as &dyn util::Key) {
-                log::debug!("Removing conflicting ancestor: {}", ancestor.0.display());
-            }
-        }
+            .filter_map(|ancestor| self.entries.remove(&ancestor as &dyn util::Key))
+            .for_each(|entry| {
+                log::debug!("Removing conflicting ancestor: {}", entry.path().display())
+            });
 
-        for descendant in self
-            .descendants(entry.path())
+        entry
+            .path()
+            .tap(|path| self.descendants(path))
             .into_iter()
             .map(util::PathBuf)
-        {
-            if let Some(_) = self.entries.remove(&descendant as &dyn util::Key) {
+            .filter_map(|descendant| self.entries.remove(&descendant as &dyn util::Key))
+            .for_each(|entry| {
                 log::debug!(
                     "Removing conflicting descendant: {}",
-                    descendant.0.display(),
-                );
-            }
-        }
+                    entry.path().display(),
+                )
+            });
 
         let key = entry.path().to_path_buf().tap(util::PathBuf);
         self.changed |= self.entries.insert(key, entry).is_none();
