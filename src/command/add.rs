@@ -1,3 +1,4 @@
+use std::convert;
 use std::env;
 use std::fs;
 use std::path;
@@ -21,7 +22,7 @@ impl Add {
         let mut index = crate::Index::lock(&git)?;
 
         for path in self.paths {
-            for entry in workspace.walk(&path) {
+            for entry in workspace.walk(&path, convert::identity) {
                 let entry = entry?;
 
                 if entry.file_type().is_dir() {

@@ -92,6 +92,16 @@ impl Index {
         Ok(entries)
     }
 
+    pub fn contains_key(&self, path: &path::Path) -> bool {
+        let file_tracked = self
+            .entries
+            .contains_key(&util::Path(path) as &dyn util::Key);
+
+        let directory_tracked = self.descendants(path).next().is_some();
+
+        file_tracked || directory_tracked
+    }
+
     pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
         let entry = Entry::new(meta, id, path);
 
