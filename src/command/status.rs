@@ -1,9 +1,10 @@
 use std::env;
-use std::fs;
 use std::io;
 use std::path;
 
 use structopt::StructOpt;
+
+use crate::workspace;
 
 #[derive(StructOpt)]
 pub struct Status {}
@@ -16,22 +17,17 @@ impl Status {
         let index = crate::Index::lock(&git)?;
 
         Self::walk(&workspace, &index, path::Path::new("."), &mut |entry| {
-            let relative = entry
-                .path()
-                .strip_prefix(workspace.root())
-                .expect("[INTERNAL ERROR]: workspace must contain path");
-
             if entry.file_type().is_dir() {
-                println!("?? {}/", relative.display());
+                println!("?? {}/", entry.relative().display());
             } else {
-                println!("?? {}", relative.display());
+                println!("?? {}", entry.relative().display());
             }
         })?;
 
         Ok(())
     }
 
-    fn walk<F: FnMut(walkdir::DirEntry)>(
+    fn walk<F: for<'a> FnMut(workspace::DirEntry<'a>)>(
         workspace: &crate::Workspace,
         index: &crate::Index,
         relative: &path::Path,
@@ -39,16 +35,14 @@ impl Status {
     ) -> io::Result<()> {
         for entry in workspace.walk(relative, |walkdir| walkdir.min_depth(1).max_depth(1)) {
             let entry = entry?;
-            let relative = entry
-                .path()
-                .strip_prefix(workspace.root())
-                .expect("[INTERNAL ERROR]: workspace must contain path");
-            if index.contains_key(relative) {
-                if entry.file_type().is_dir() {
-                    Self::walk(workspace, index, relative, visit)?;
-                }
-            } else if Self::is_trackable(workspace, index, relative, entry.file_type())? {
-                visit(entry);
+            let relative = entry.relative();
+            let file_type = entry.file_type();
+
+            match index.contains_key(relative) {
+                true if file_type.is_dir() => Self::walk(workspace, index, relative, visit)?,
+                true => (),
+                false if Self::is_trackable(workspace, index, &entry)? => visit(entry),
+                false => (),
             }
         }
         Ok(())
@@ -57,9 +51,11 @@ impl Status {
     fn is_trackable(
         workspace: &crate::Workspace,
         index: &crate::Index,
-        relative: &path::Path,
-        file_type: fs::FileType,
+        entry: &workspace::DirEntry,
     ) -> io::Result<bool> {
+        let relative = entry.relative();
+        let file_type = entry.file_type();
+
         if file_type.is_file() {
             return Ok(!index.contains_key(relative));
         }
@@ -74,13 +70,7 @@ impl Status {
                 .max_depth(1)
                 .sort_by_key(|entry| entry.file_type().is_dir())
         }) {
-            let entry = entry?;
-            let relative = entry
-                .path()
-                .strip_prefix(workspace.root())
-                .expect("[INTERNAL ERROR]: workspace must contain path");
-
-            if Self::is_trackable(workspace, index, relative, entry.file_type())? {
+            if Self::is_trackable(workspace, index, &entry?)? {
                 return Ok(true);
             }
         }
