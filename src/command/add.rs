@@ -1,6 +1,7 @@
 use std::convert;
 use std::env;
 use std::fs;
+use std::io;
 use std::path;
 
 use structopt::StructOpt;
@@ -8,21 +9,42 @@ use structopt::StructOpt;
 use crate::object;
 
 #[derive(StructOpt)]
-pub struct Add {
+pub struct Configuration {
     paths: Vec<path::PathBuf>,
 }
 
-impl Add {
+impl Configuration {
     pub fn run(self) -> anyhow::Result<()> {
         let root = env::current_dir()?;
         let git = root.join(".git");
 
         let workspace = crate::Workspace::new(root);
         let database = crate::Database::new(&git)?;
-        let mut index = crate::Index::lock(&git)?;
+        let index = crate::Index::lock(&git)?;
 
+        let add = Add {
+            database,
+            index,
+            workspace,
+            paths: self.paths,
+        };
+
+        add.run()?;
+        Ok(())
+    }
+}
+
+struct Add {
+    database: crate::Database,
+    index: crate::Index,
+    workspace: crate::Workspace,
+    paths: Vec<path::PathBuf>,
+}
+
+impl Add {
+    fn run(mut self) -> io::Result<()> {
         for path in self.paths {
-            for entry in workspace.walk(&path, convert::identity) {
+            for entry in self.workspace.walk(&path, convert::identity) {
                 let entry = entry?;
                 let relative = entry.relative();
 
@@ -35,13 +57,12 @@ impl Add {
                     .map(object::Blob::new)
                     .map(crate::Object::Blob)?;
 
-                let id = database.store(&blob)?;
+                let id = self.database.store(&blob)?;
 
-                index.insert(&meta, id, relative.to_path_buf());
+                self.index.insert(&meta, id, relative.to_path_buf());
             }
         }
 
-        index.commit()?;
-        Ok(())
+        self.index.commit()
     }
 }
