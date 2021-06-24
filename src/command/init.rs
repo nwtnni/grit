@@ -1,19 +1,20 @@
 use std::env;
 use std::fs;
+use std::io;
 use std::path;
 
 use structopt::StructOpt;
 
 /// Initialize a new git repository.
 #[derive(StructOpt)]
-pub struct Init {
+pub struct Configuration {
     /// Path to directory to initialize.
     ///
     /// Default to current working directory if not provided.
     root: Option<path::PathBuf>,
 }
 
-impl Init {
+impl Configuration {
     pub fn run(self) -> anyhow::Result<()> {
         let root = match self.root {
             None => env::current_dir()?,
@@ -23,15 +24,30 @@ impl Init {
             }
         };
 
-        let mut path = root.join(".git");
+        let init = Init { root };
+        init.run()?;
+        Ok(())
+    }
+}
 
+struct Init {
+    root: path::PathBuf,
+}
+
+impl Init {
+    fn run(mut self) -> io::Result<()> {
+        self.root.push(".git");
         for directory in &["objects", "refs"] {
-            path.push(directory);
-            fs::create_dir_all(&path)?;
-            path.pop();
+            self.root.push(directory);
+            fs::create_dir_all(&self.root)?;
+            self.root.pop();
         }
+        self.root.pop();
 
-        log::info!("Initialized empty git repository at `{}`", root.display());
+        log::info!(
+            "Initialized empty git repository at `{}`",
+            self.root.display()
+        );
 
         Ok(())
     }

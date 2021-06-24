@@ -5,5 +5,5 @@ mod status;
 
 pub use add::Configuration as Add;
 pub use commit::Configuration as Commit;
-pub use init::Init;
+pub use init::Configuration as Init;
 pub use status::Status;
