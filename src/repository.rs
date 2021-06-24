@@ -24,8 +24,8 @@ impl Repository {
         crate::Index::lock(self.root.join(".git/index"))
     }
 
-    pub fn reference(&self) -> crate::Reference {
-        crate::Reference::new(self.root.join(".git/refs"), self.root.join(".git/HEAD"))
+    pub fn references(&self) -> crate::References {
+        crate::References::new(self.root.join(".git/refs"), self.root.join(".git/HEAD"))
     }
 
     pub fn workspace(&self) -> crate::Workspace {

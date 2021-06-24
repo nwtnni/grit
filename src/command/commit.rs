@@ -41,7 +41,7 @@ impl Configuration {
         let commit = Commit {
             database: repository.database()?,
             index: repository.index()?,
-            reference: repository.reference(),
+            references: repository.references(),
             author_name: self.author_name,
             author_email: self.author_email,
             message,
@@ -55,7 +55,7 @@ impl Configuration {
 struct Commit {
     database: crate::Database,
     index: crate::Index,
-    reference: crate::Reference,
+    references: crate::References,
     author_name: String,
     author_email: String,
     message: String,
@@ -72,7 +72,7 @@ impl Commit {
             .to_owned();
 
         let author = commit::Author::new(self.author_name, self.author_email, chrono::Local::now());
-        let parent = self.reference.head()?;
+        let parent = self.references.head()?;
         let commit = crate::Object::Commit(object::Commit::new(
             commit_tree,
             parent,
@@ -81,7 +81,7 @@ impl Commit {
         ));
         let commit_id = self.database.store(&commit)?;
 
-        self.reference.set_head(&commit_id)?;
+        self.references.set_head(&commit_id)?;
 
         println!(
             "[{}{}] {}",

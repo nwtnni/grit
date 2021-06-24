@@ -6,14 +6,14 @@ use crate::file;
 use crate::object;
 
 #[derive(Clone, Debug)]
-pub struct Reference {
+pub struct References {
     root: path::PathBuf,
     head: path::PathBuf,
 }
 
-impl Reference {
+impl References {
     pub fn new(root: path::PathBuf, head: path::PathBuf) -> Self {
-        Reference { root, head }
+        References { root, head }
     }
 
     pub fn set_head(&self, id: &object::Id) -> io::Result<()> {
