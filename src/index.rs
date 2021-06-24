@@ -101,6 +101,10 @@ impl Index {
         file_tracked || directory_tracked
     }
 
+    pub fn get(&self, path: &path::Path) -> Option<&Entry> {
+        self.entries.get(&util::Path(path) as &dyn util::Key)
+    }
+
     pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
         let entry = Entry::new(meta, id, path);
 

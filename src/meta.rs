@@ -17,25 +17,25 @@ use crate::util::Tap as _;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Data {
     /// Change time (whole seconds)
-    ctime: u32,
+    pub ctime: u32,
     /// Change time (fractional nanoseconds)
-    ctime_nsec: u32,
+    pub ctime_nsec: u32,
     /// Modified time (whole seconds)
-    mtime: u32,
+    pub mtime: u32,
     /// Modified time (fractional nanoseconds)
-    mtime_nsec: u32,
+    pub mtime_nsec: u32,
     /// Device ID
-    dev: u32,
+    pub dev: u32,
     /// `inode` number
-    ino: u32,
+    pub ino: u32,
     /// Permission mode
-    mode: Mode,
+    pub mode: Mode,
     /// User ID
-    uid: u32,
+    pub uid: u32,
     /// Group ID
-    gid: u32,
+    pub gid: u32,
     /// File size (bytes)
-    size: u32,
+    pub size: u32,
 }
 
 impl Data {

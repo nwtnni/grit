@@ -29,20 +29,10 @@ struct Status {
 
 impl Status {
     fn run(self) -> io::Result<()> {
-        self.walk(path::Path::new("."), &mut |entry| {
-            if entry.file_type().is_dir() {
-                println!("?? {}/", entry.relative().display());
-            } else {
-                println!("?? {}", entry.relative().display());
-            }
-        })
+        self.walk(path::Path::new("."))
     }
 
-    fn walk<F: for<'a> FnMut(workspace::DirEntry<'a>)>(
-        &self,
-        relative: &path::Path,
-        visit: &mut F,
-    ) -> io::Result<()> {
+    fn walk(&self, relative: &path::Path) -> io::Result<()> {
         for entry in self
             .workspace
             .walk(relative, |walkdir| walkdir.min_depth(1).max_depth(1))
@@ -52,13 +42,34 @@ impl Status {
             let file_type = entry.file_type();
 
             match self.index.contains_key(relative) {
-                true if file_type.is_dir() => self.walk(relative, visit)?,
-                true => (),
-                false if self.is_trackable(&entry)? => visit(entry),
+                true if file_type.is_dir() => self.walk(relative)?,
+                true => self.visit_tracked(entry)?,
+                false if self.is_trackable(&entry)? => self.visit_untracked(entry),
                 false => (),
             }
         }
         Ok(())
+    }
+
+    fn visit_tracked(&self, entry: workspace::DirEntry) -> io::Result<()> {
+        let tracked = self
+            .index
+            .get(entry.relative())
+            .expect("[INTERNAL ERROR]: `Index::contains_key` inconsistent with `Index::get`");
+
+        if tracked.metadata().size as u64 != entry.metadata()?.len() {
+            println!(" M {}", entry.relative().display());
+        }
+
+        Ok(())
+    }
+
+    fn visit_untracked(&self, entry: workspace::DirEntry) {
+        if entry.file_type().is_dir() {
+            println!("?? {}/", entry.relative().display());
+        } else {
+            println!("?? {}", entry.relative().display());
+        }
     }
 
     fn is_trackable(&self, entry: &workspace::DirEntry) -> io::Result<bool> {
