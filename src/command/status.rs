@@ -4,6 +4,7 @@ use std::path;
 
 use structopt::StructOpt;
 
+use crate::meta;
 use crate::workspace;
 
 #[derive(StructOpt)]
@@ -52,12 +53,20 @@ impl Status {
     }
 
     fn visit_tracked(&self, entry: workspace::DirEntry) -> io::Result<()> {
-        let tracked = self
+        let new = entry.metadata()?;
+        let old = self
             .index
             .get(entry.relative())
-            .expect("[INTERNAL ERROR]: `Index::contains_key` inconsistent with `Index::get`");
+            .expect("[INTERNAL ERROR]: `Index::contains_key` inconsistent with `Index::get`")
+            .metadata();
 
-        if tracked.metadata().size as u64 != entry.metadata()?.len() {
+        let new_mode = meta::Mode::from(&new);
+        let new_size = new.len();
+
+        let old_mode = old.mode;
+        let old_size = old.size as u64;
+
+        if new_mode != old_mode || new_size != old_size {
             println!(" M {}", entry.relative().display());
         }
 
