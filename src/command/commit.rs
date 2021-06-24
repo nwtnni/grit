@@ -12,7 +12,7 @@ use crate::object::tree;
 use crate::util::Tap as _;
 
 #[derive(StructOpt)]
-pub struct Commit {
+pub struct Configuration {
     #[structopt(long, env = "GIT_AUTHOR_NAME")]
     author_name: String,
 
@@ -23,7 +23,7 @@ pub struct Commit {
     message: Option<String>,
 }
 
-impl Commit {
+impl Configuration {
     pub fn run(self) -> anyhow::Result<()> {
         let message = match self.message {
             Some(message) => message,
@@ -43,10 +43,35 @@ impl Commit {
         let reference = crate::Reference::new(&git);
         let index = crate::Index::lock(&git)?;
 
+        let commit = Commit {
+            database,
+            index,
+            reference,
+            author_name: self.author_name,
+            author_email: self.author_email,
+            message,
+        };
+
+        commit.run()?;
+        Ok(())
+    }
+}
+
+struct Commit {
+    database: crate::Database,
+    index: crate::Index,
+    reference: crate::Reference,
+    author_name: String,
+    author_email: String,
+    message: String,
+}
+
+impl Commit {
+    pub fn run(self) -> io::Result<()> {
         let mut stack = Vec::new();
         let mut count = Vec::new();
 
-        for node in &index {
+        for node in &self.index {
             let path = node.path();
             let depth = path.components().count();
             let name = path
@@ -71,7 +96,7 @@ impl Commit {
                         .split_off(index)
                         .tap(object::Tree::new)
                         .tap(crate::Object::Tree)
-                        .tap(|tree| database.store(&tree))?
+                        .tap(|tree| self.database.store(&tree))?
                 }
             };
 
@@ -82,16 +107,25 @@ impl Commit {
             count.last_mut().map(|count| *count += 1);
         }
 
-        let commit_header = message.split('\n').next().unwrap_or_default().to_owned();
+        let commit_header = self
+            .message
+            .split('\n')
+            .next()
+            .unwrap_or_default()
+            .to_owned();
         let commit_tree = *stack.pop().unwrap().id();
 
         let author = commit::Author::new(self.author_name, self.author_email, chrono::Local::now());
-        let parent = reference.head()?;
-        let commit =
-            crate::Object::Commit(object::Commit::new(commit_tree, parent, author, message));
-        let commit_id = database.store(&commit)?;
+        let parent = self.reference.head()?;
+        let commit = crate::Object::Commit(object::Commit::new(
+            commit_tree,
+            parent,
+            author,
+            self.message,
+        ));
+        let commit_id = self.database.store(&commit)?;
 
-        reference.set_head(&commit_id)?;
+        self.reference.set_head(&commit_id)?;
 
         println!(
             "[{}{}] {}",
