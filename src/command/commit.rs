@@ -68,6 +68,41 @@ struct Commit {
 
 impl Commit {
     pub fn run(self) -> io::Result<()> {
+        let commit_tree = self.walk_index()?;
+        let commit_header = self
+            .message
+            .split('\n')
+            .next()
+            .unwrap_or_default()
+            .to_owned();
+
+        let author = commit::Author::new(self.author_name, self.author_email, chrono::Local::now());
+        let parent = self.reference.head()?;
+        let commit = crate::Object::Commit(object::Commit::new(
+            commit_tree,
+            parent,
+            author,
+            self.message,
+        ));
+        let commit_id = self.database.store(&commit)?;
+
+        self.reference.set_head(&commit_id)?;
+
+        println!(
+            "[{}{}] {}",
+            if parent.is_some() {
+                ""
+            } else {
+                "(root-commit)"
+            },
+            commit_id,
+            commit_header
+        );
+
+        Ok(())
+    }
+
+    fn walk_index(&self) -> io::Result<object::Id> {
         let mut stack = Vec::new();
         let mut count = Vec::new();
 
@@ -107,37 +142,11 @@ impl Commit {
             count.last_mut().map(|count| *count += 1);
         }
 
-        let commit_header = self
-            .message
-            .split('\n')
-            .next()
-            .unwrap_or_default()
-            .to_owned();
-        let commit_tree = *stack.pop().unwrap().id();
+        let tree_id = *stack
+            .pop()
+            .expect("[INTERNAL ERROR]: index must contain at least root directory")
+            .id();
 
-        let author = commit::Author::new(self.author_name, self.author_email, chrono::Local::now());
-        let parent = self.reference.head()?;
-        let commit = crate::Object::Commit(object::Commit::new(
-            commit_tree,
-            parent,
-            author,
-            self.message,
-        ));
-        let commit_id = self.database.store(&commit)?;
-
-        self.reference.set_head(&commit_id)?;
-
-        println!(
-            "[{}{}] {}",
-            if parent.is_some() {
-                ""
-            } else {
-                "(root-commit)"
-            },
-            commit_id,
-            commit_header
-        );
-
-        Ok(())
+        Ok(tree_id)
     }
 }
