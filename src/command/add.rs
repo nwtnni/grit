@@ -16,19 +16,13 @@ pub struct Configuration {
 impl Configuration {
     pub fn run(self) -> anyhow::Result<()> {
         let root = env::current_dir()?;
-        let git = root.join(".git");
-
-        let workspace = crate::Workspace::new(root);
-        let database = crate::Database::new(&git)?;
-        let index = crate::Index::lock(&git)?;
-
+        let repository = crate::Repository::new(root);
         let add = Add {
-            database,
-            index,
-            workspace,
+            database: repository.database()?,
+            index: repository.index()?,
+            workspace: repository.workspace(),
             paths: self.paths,
         };
-
         add.run()?;
         Ok(())
     }

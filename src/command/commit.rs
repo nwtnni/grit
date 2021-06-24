@@ -37,16 +37,11 @@ impl Configuration {
         };
 
         let root = env::current_dir()?;
-        let git = root.join(".git");
-
-        let database = crate::Database::new(&git)?;
-        let reference = crate::Reference::new(&git);
-        let index = crate::Index::lock(&git)?;
-
+        let repository = crate::Repository::new(root);
         let commit = Commit {
-            database,
-            index,
-            reference,
+            database: repository.database()?,
+            index: repository.index()?,
+            reference: repository.reference(),
             author_name: self.author_name,
             author_email: self.author_email,
             message,

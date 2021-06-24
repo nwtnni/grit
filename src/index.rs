@@ -30,8 +30,7 @@ pub struct Index {
 }
 
 impl Index {
-    pub fn lock(git: &path::Path) -> io::Result<Self> {
-        let path = git.join("index");
+    pub fn lock(path: path::PathBuf) -> io::Result<Self> {
         let lock = file::WriteLock::new(path)?;
 
         let (entries, lock) = match lock.upgrade()? {

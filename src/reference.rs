@@ -12,11 +12,8 @@ pub struct Reference {
 }
 
 impl Reference {
-    pub fn new(git: &path::Path) -> Self {
-        Reference {
-            root: git.join("refs"),
-            head: git.join("HEAD"),
-        }
+    pub fn new(root: path::PathBuf, head: path::PathBuf) -> Self {
+        Reference { root, head }
     }
 
     pub fn set_head(&self, id: &object::Id) -> io::Result<()> {

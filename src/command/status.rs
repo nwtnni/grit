@@ -12,10 +12,11 @@ pub struct Configuration {}
 impl Configuration {
     pub fn run(self) -> anyhow::Result<()> {
         let root = env::current_dir()?;
-        let git = root.join(".git");
-        let workspace = crate::Workspace::new(root);
-        let index = crate::Index::lock(&git)?;
-        let status = Status { index, workspace };
+        let repository = crate::Repository::new(root);
+        let status = Status {
+            index: repository.index()?,
+            workspace: repository.workspace(),
+        };
         status.run()?;
         Ok(())
     }

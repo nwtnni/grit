@@ -12,10 +12,8 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(git: &path::Path) -> io::Result<Self> {
-        Ok(Database {
-            root: git.join("objects"),
-        })
+    pub fn new(root: path::PathBuf) -> io::Result<Self> {
+        Ok(Database { root })
     }
 
     pub fn store(&self, object: &Object) -> io::Result<object::Id> {

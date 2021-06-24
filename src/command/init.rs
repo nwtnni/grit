@@ -24,29 +24,24 @@ impl Configuration {
             }
         };
 
-        let init = Init { root };
+        let repository = crate::Repository::new(root);
+        let init = Init { repository };
         init.run()?;
         Ok(())
     }
 }
 
 struct Init {
-    root: path::PathBuf,
+    repository: crate::Repository,
 }
 
 impl Init {
     fn run(mut self) -> io::Result<()> {
-        self.root.push(".git");
-        for directory in &["objects", "refs"] {
-            self.root.push(directory);
-            fs::create_dir_all(&self.root)?;
-            self.root.pop();
-        }
-        self.root.pop();
+        self.repository.init()?;
 
         log::info!(
             "Initialized empty git repository at `{}`",
-            self.root.display()
+            self.repository.root().display()
         );
 
         Ok(())
