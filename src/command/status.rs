@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::convert::TryFrom as _;
 use std::env;
 use std::io;
 use std::path;
@@ -5,6 +8,8 @@ use std::path;
 use structopt::StructOpt;
 
 use crate::meta;
+use crate::util;
+use crate::util::Tap as _;
 use crate::workspace;
 
 #[derive(StructOpt)]
@@ -17,6 +22,8 @@ impl Configuration {
         let status = Status {
             index: repository.index()?,
             workspace: repository.workspace(),
+            tracked: BTreeMap::new(),
+            untracked: BTreeSet::new(),
         };
         status.run()?;
         Ok(())
@@ -26,14 +33,21 @@ impl Configuration {
 struct Status {
     index: crate::Index,
     workspace: crate::Workspace,
+    tracked: BTreeMap<util::PathBuf, meta::Data>,
+    untracked: BTreeSet<util::PathBuf>,
 }
 
 impl Status {
-    fn run(self) -> io::Result<()> {
-        self.walk(path::Path::new("."))
+    fn run(mut self) -> io::Result<()> {
+        self.walk_fs(path::Path::new("."))?;
+        self.walk_index();
+        for util::PathBuf(path) in &self.untracked {
+            println!("?? {}", path.display());
+        }
+        Ok(())
     }
 
-    fn walk(&self, relative: &path::Path) -> io::Result<()> {
+    fn walk_fs(&mut self, relative: &path::Path) -> io::Result<()> {
         for entry in self
             .workspace
             .walk(relative, |walkdir| walkdir.min_depth(1).max_depth(1))
@@ -41,43 +55,55 @@ impl Status {
             let entry = entry?;
             let relative = entry.relative();
             let file_type = entry.file_type();
+            let metadata = entry
+                .metadata()?
+                .tap(|metadata| meta::Data::try_from(&metadata))
+                .expect("[INTERNAL ERROR]: could not convert metadata");
 
             match self.index.contains_key(relative) {
-                true if file_type.is_dir() => self.walk(relative)?,
-                true => self.visit_tracked(entry)?,
-                false if self.is_trackable(&entry)? => self.visit_untracked(entry),
-                false => (),
+                true if file_type.is_dir() => self.walk_fs(relative)?,
+                true => {
+                    self.tracked
+                        .insert(relative.to_path_buf().tap(util::PathBuf), metadata);
+                }
+                false if self.is_trackable(&entry)? => {
+                    let relative = if metadata.mode.is_directory() {
+                        relative
+                            .as_os_str()
+                            .to_os_string()
+                            .tap_mut(|path| path.push("/"))
+                            .tap(path::PathBuf::from)
+                    } else {
+                        relative.to_path_buf()
+                    };
+
+                    self.untracked.insert(util::PathBuf(relative));
+                }
+                false => continue,
             }
         }
         Ok(())
     }
 
-    fn visit_tracked(&self, entry: workspace::DirEntry) -> io::Result<()> {
-        let new = entry.metadata()?;
-        let old = self
-            .index
-            .get(entry.relative())
-            .expect("[INTERNAL ERROR]: `Index::contains_key` inconsistent with `Index::get`")
-            .metadata();
+    fn walk_index(&self) {
+        for entry in self.index.files() {
+            let meta = match self
+                .tracked
+                .get(&util::Path(entry.path()) as &dyn util::Key)
+            {
+                Some(meta) => meta,
+                None => {
+                    println!(" D {}", entry.path().display());
+                    continue;
+                }
+            };
 
-        let new_mode = meta::Mode::from(&new);
-        let new_size = new.len();
+            let old = entry.metadata();
+            let new = meta;
 
-        let old_mode = old.mode;
-        let old_size = old.size as u64;
-
-        if new_mode != old_mode || new_size != old_size {
-            println!(" M {}", entry.relative().display());
-        }
-
-        Ok(())
-    }
-
-    fn visit_untracked(&self, entry: workspace::DirEntry) {
-        if entry.file_type().is_dir() {
-            println!("?? {}/", entry.relative().display());
-        } else {
-            println!("?? {}", entry.relative().display());
+            if new.mode != old.mode || new.size != old.size {
+                println!(" M {}", entry.path().display());
+            }
         }
     }
 

@@ -105,6 +105,10 @@ impl Index {
         self.entries.get(&util::Path(path) as &dyn util::Key)
     }
 
+    pub fn files<'a>(&'a self) -> impl Iterator<Item = &'a Entry> + 'a {
+        self.entries.values()
+    }
+
     pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
         let entry = Entry::new(meta, id, path);
 
