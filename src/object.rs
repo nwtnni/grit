@@ -23,6 +23,14 @@ pub enum Object {
 }
 
 impl Object {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        let mut cursor = io::Cursor::new(&mut buffer);
+        self.write(&mut cursor)
+            .expect("[INTERNAL ERROR]: write to `Vec` failed");
+        buffer
+    }
+
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(self.r#type().as_bytes())?;
         writer.write_all(b" ")?;
@@ -57,6 +65,10 @@ impl Object {
 pub struct Id([u8; 20]);
 
 impl Id {
+    pub fn hash(bytes: &[u8]) -> Self {
+        Self(Sha1::from(bytes.as_ref()).digest().bytes())
+    }
+
     pub fn as_bytes(&self) -> &[u8; 20] {
         &self.0
     }
@@ -122,12 +134,6 @@ impl fmt::Display for Id {
             write!(fmt, "{}{}", hi as char, lo as char)?;
         }
         Ok(())
-    }
-}
-
-impl<T: AsRef<[u8]>> From<T> for Id {
-    fn from(data: T) -> Self {
-        Self(Sha1::from(data.as_ref()).digest().bytes())
     }
 }
 

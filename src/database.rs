@@ -17,11 +17,8 @@ impl Database {
     }
 
     pub fn store(&self, object: &Object) -> io::Result<object::Id> {
-        let mut buffer = Vec::new();
-        let mut cursor = io::Cursor::new(&mut buffer);
-        object.write(&mut cursor)?;
-
-        let id = object::Id::from(&buffer);
+        let buffer = object.to_bytes();
+        let id = object::Id::hash(&buffer);
         let path = self.root.join(id.to_path_buf());
 
         // Object has already been written to disk.
