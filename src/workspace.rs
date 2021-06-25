@@ -1,35 +1,39 @@
 use std::path;
+use std::rc::Rc;
 
 use crate::util::Tap as _;
 
 #[derive(Debug)]
 pub struct Workspace {
-    root: path::PathBuf,
+    root: Rc<path::Path>,
 }
 
 impl Workspace {
     pub fn new(root: path::PathBuf) -> Self {
-        Workspace { root }
+        Workspace {
+            root: Rc::from(root),
+        }
     }
 
     pub fn root(&self) -> &path::Path {
         &self.root
     }
 
-    pub fn walk<'a, F: FnOnce(walkdir::WalkDir) -> walkdir::WalkDir>(
-        &'a self,
+    pub fn walk<F: FnOnce(walkdir::WalkDir) -> walkdir::WalkDir>(
+        &self,
         relative: &path::Path,
         configure: F,
-    ) -> impl Iterator<Item = walkdir::Result<DirEntry<'a>>> {
-        let root = self.root.join(relative);
+    ) -> impl Iterator<Item = walkdir::Result<DirEntry>> {
+        let root = Rc::clone(&self.root);
+        let path = self.root.join(relative);
         let git = self.root.join(".git");
-        walkdir::WalkDir::new(root)
+        walkdir::WalkDir::new(path)
             .tap(configure)
             .into_iter()
             .filter_entry(move |entry| !entry.path().starts_with(&git))
             .map(move |entry| {
                 entry.map(|entry| DirEntry {
-                    root: self.root.as_path(),
+                    root: Rc::clone(&root),
                     inner: entry,
                 })
             })
@@ -37,12 +41,12 @@ impl Workspace {
 }
 
 #[derive(Clone, Debug)]
-pub struct DirEntry<'a> {
-    root: &'a path::Path,
+pub struct DirEntry {
+    root: Rc<path::Path>,
     inner: walkdir::DirEntry,
 }
 
-impl<'a> std::ops::Deref for DirEntry<'a> {
+impl std::ops::Deref for DirEntry {
     type Target = walkdir::DirEntry;
 
     fn deref(&self) -> &Self::Target {
@@ -50,17 +54,17 @@ impl<'a> std::ops::Deref for DirEntry<'a> {
     }
 }
 
-impl<'a> DirEntry<'a> {
+impl DirEntry {
     pub fn relative(&self) -> &path::Path {
         self.inner
             .path()
-            .strip_prefix(self.root)
+            .strip_prefix(&*self.root)
             .expect("[INTERNAL ERROR]: workspace must contain path")
     }
 }
 
-impl<'a> From<DirEntry<'a>> for walkdir::DirEntry {
-    fn from(entry: DirEntry<'a>) -> Self {
+impl From<DirEntry> for walkdir::DirEntry {
+    fn from(entry: DirEntry) -> Self {
         entry.inner
     }
 }
