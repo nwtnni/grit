@@ -109,8 +109,8 @@ impl Index {
         self.entries.values()
     }
 
-    pub fn insert(&mut self, meta: &fs::Metadata, id: object::Id, path: path::PathBuf) {
-        let entry = Entry::new(meta, id, path);
+    pub fn insert(&mut self, metadata: &fs::Metadata, id: object::Id, path: path::PathBuf) {
+        let entry = Entry::new(metadata, id, path);
 
         entry
             .path()
@@ -325,27 +325,27 @@ impl<'a> Iterator for Iter<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
-    meta: meta::Data,
+    metadata: meta::Metadata,
     id: object::Id,
     flag: u16,
     path: path::PathBuf,
 }
 
 impl Entry {
-    pub fn new(meta: &fs::Metadata, id: object::Id, path: path::PathBuf) -> Self {
-        let meta =
-            meta::Data::try_from(meta).expect("[INTERNAL ERROR]: failed to convert metadata");
+    pub fn new(metadata: &fs::Metadata, id: object::Id, path: path::PathBuf) -> Self {
+        let metadata = meta::Metadata::try_from(metadata)
+            .expect("[INTERNAL ERROR]: failed to convert metadata");
         let flag = cmp::min(0xFFF, path.as_os_str().as_bytes().len()) as u16;
         Entry {
-            meta,
+            metadata,
             id,
             flag,
             path,
         }
     }
 
-    pub fn metadata(&self) -> &meta::Data {
-        &self.meta
+    pub fn metadata(&self) -> &meta::Metadata {
+        &self.metadata
     }
 
     pub fn id(&self) -> &object::Id {
@@ -357,7 +357,7 @@ impl Entry {
     }
 
     fn read<R: io::Read>(reader: &mut R) -> io::Result<Self> {
-        let meta = meta::Data::read(reader)?;
+        let metadata = meta::Metadata::read(reader)?;
         let id = object::Id::read_bytes(reader)?;
         let flag = reader.read_u16::<BigEndian>()?;
 
@@ -373,7 +373,7 @@ impl Entry {
         }
 
         Ok(Self {
-            meta,
+            metadata,
             id,
             flag,
             path: buffer.tap(ffi::OsString::from_vec).tap(path::PathBuf::from),
@@ -381,7 +381,7 @@ impl Entry {
     }
 
     fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
-        self.meta.write(writer)?;
+        self.metadata.write(writer)?;
         writer.write_all(self.id.as_bytes())?;
         writer.write_u16::<BigEndian>(self.flag)?;
         writer.write_all(self.path.as_os_str().as_bytes())?;
@@ -393,7 +393,7 @@ impl Entry {
     }
 
     fn len(&self) -> usize {
-        self.meta.len() + self.id.as_bytes().len() + 2 + self.path.as_os_str().as_bytes().len()
+        self.metadata.len() + self.id.as_bytes().len() + 2 + self.path.as_os_str().as_bytes().len()
     }
 
     fn padding(&self) -> usize {

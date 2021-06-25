@@ -33,7 +33,7 @@ impl Configuration {
 struct Status {
     index: crate::Index,
     workspace: crate::Workspace,
-    tracked: BTreeMap<util::PathBuf, meta::Data>,
+    tracked: BTreeMap<util::PathBuf, meta::Metadata>,
     untracked: BTreeSet<util::PathBuf>,
 }
 
@@ -57,7 +57,7 @@ impl Status {
             let file_type = entry.file_type();
             let metadata = entry
                 .metadata()?
-                .tap(|metadata| meta::Data::try_from(&metadata))
+                .tap(|metadata| meta::Metadata::try_from(&metadata))
                 .expect("[INTERNAL ERROR]: could not convert metadata");
 
             match self.index.contains_key(relative) {
@@ -87,11 +87,11 @@ impl Status {
 
     fn walk_index(&self) {
         for entry in self.index.files() {
-            let meta = match self
+            let metadata = match self
                 .tracked
                 .get(&util::Path(entry.path()) as &dyn util::Key)
             {
-                Some(meta) => meta,
+                Some(metadata) => metadata,
                 None => {
                     println!(" D {}", entry.path().display());
                     continue;
@@ -99,7 +99,7 @@ impl Status {
             };
 
             let old = entry.metadata();
-            let new = meta;
+            let new = metadata;
 
             if new.mode != old.mode || new.size != old.size {
                 println!(" M {}", entry.path().display());

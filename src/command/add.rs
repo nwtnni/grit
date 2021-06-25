@@ -46,14 +46,14 @@ impl Add {
                     continue;
                 }
 
-                let meta = entry.metadata()?;
+                let metadata = entry.metadata()?;
                 let blob = fs::read(entry.path())
                     .map(object::Blob::new)
                     .map(crate::Object::Blob)?;
 
                 let id = self.database.store(&blob)?;
 
-                self.index.insert(&meta, id, relative.to_path_buf());
+                self.index.insert(&metadata, id, relative.to_path_buf());
             }
         }
 

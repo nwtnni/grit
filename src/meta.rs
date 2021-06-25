@@ -15,7 +15,7 @@ use byteorder::WriteBytesExt as _;
 use crate::util::Tap as _;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Data {
+pub struct Metadata {
     /// Change time (whole seconds)
     pub ctime: u32,
     /// Change time (fractional nanoseconds)
@@ -38,13 +38,13 @@ pub struct Data {
     pub size: u32,
 }
 
-impl Data {
+impl Metadata {
     pub fn mode(&self) -> &Mode {
         &self.mode
     }
 
     pub fn read<R: io::Read>(reader: &mut R) -> io::Result<Self> {
-        Ok(Data {
+        Ok(Metadata {
             ctime: reader.read_u32::<BigEndian>()?,
             ctime_nsec: reader.read_u32::<BigEndian>()?,
             mtime: reader.read_u32::<BigEndian>()?,
@@ -81,20 +81,20 @@ impl Data {
     }
 }
 
-impl convert::TryFrom<&'_ fs::Metadata> for Data {
+impl convert::TryFrom<&'_ fs::Metadata> for Metadata {
     type Error = num::TryFromIntError;
-    fn try_from(meta: &fs::Metadata) -> Result<Self, Self::Error> {
+    fn try_from(metadata: &fs::Metadata) -> Result<Self, Self::Error> {
         Ok(Self {
-            ctime: meta.ctime().tap(u32::try_from)?,
-            ctime_nsec: meta.ctime_nsec().tap(u32::try_from)?,
-            mtime: meta.mtime().tap(u32::try_from)?,
-            mtime_nsec: meta.mtime_nsec().tap(u32::try_from)?,
-            dev: meta.dev().tap(u32::try_from)?,
-            ino: meta.ino().tap(u32::try_from)?,
-            mode: Mode::from(meta),
-            uid: meta.uid(),
-            gid: meta.gid(),
-            size: meta.size().tap(u32::try_from)?,
+            ctime: metadata.ctime().tap(u32::try_from)?,
+            ctime_nsec: metadata.ctime_nsec().tap(u32::try_from)?,
+            mtime: metadata.mtime().tap(u32::try_from)?,
+            mtime_nsec: metadata.mtime_nsec().tap(u32::try_from)?,
+            dev: metadata.dev().tap(u32::try_from)?,
+            ino: metadata.ino().tap(u32::try_from)?,
+            mode: Mode::from(metadata),
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+            size: metadata.size().tap(u32::try_from)?,
         })
     }
 }
@@ -152,10 +152,10 @@ impl convert::TryFrom<u32> for Mode {
 }
 
 impl From<&'_ fs::Metadata> for Mode {
-    fn from(meta: &fs::Metadata) -> Self {
-        if meta.file_type().is_dir() {
+    fn from(metadata: &fs::Metadata) -> Self {
+        if metadata.file_type().is_dir() {
             Mode::Directory
-        } else if meta.permissions().mode() & 0o111 > 0 {
+        } else if metadata.permissions().mode() & 0o111 > 0 {
             Mode::Executable
         } else {
             Mode::Regular
