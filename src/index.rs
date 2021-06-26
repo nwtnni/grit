@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::convert::TryFrom as _;
 use std::ffi;
-use std::fs;
 use std::io;
 use std::io::Read as _;
 use std::io::Write as _;
@@ -109,7 +108,7 @@ impl Index {
         self.entries.values()
     }
 
-    pub fn insert(&mut self, metadata: &fs::Metadata, id: object::Id, path: path::PathBuf) {
+    pub fn insert(&mut self, metadata: meta::Metadata, id: object::Id, path: path::PathBuf) {
         let entry = Entry::new(metadata, id, path);
 
         entry
@@ -332,9 +331,7 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn new(metadata: &fs::Metadata, id: object::Id, path: path::PathBuf) -> Self {
-        let metadata = meta::Metadata::try_from(metadata)
-            .expect("[INTERNAL ERROR]: failed to convert metadata");
+    pub fn new(metadata: meta::Metadata, id: object::Id, path: path::PathBuf) -> Self {
         let flag = cmp::min(0xFFF, path.as_os_str().as_bytes().len()) as u16;
         Entry {
             metadata,

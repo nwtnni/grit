@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::convert::TryFrom as _;
 use std::env;
 use std::io;
 use std::path;
@@ -48,20 +47,13 @@ impl Status {
     }
 
     fn walk_fs(&mut self, relative: &path::Path) -> io::Result<()> {
-        for entry in self
-            .workspace
-            .walk(relative, |walkdir| walkdir.min_depth(1).max_depth(1))
-        {
+        for entry in self.workspace.walk_list(relative)? {
             let entry = entry?;
-            let relative = entry.relative();
-            let file_type = entry.file_type();
-            let metadata = entry
-                .metadata()?
-                .tap(|metadata| meta::Metadata::try_from(&metadata))
-                .expect("[INTERNAL ERROR]: could not convert metadata");
+            let relative = entry.relative_path();
+            let metadata = entry.metadata;
 
             match self.index.contains_key(relative) {
-                true if file_type.is_dir() => self.walk_fs(relative)?,
+                true if metadata.mode.is_directory() => self.walk_fs(relative)?,
                 true => {
                     self.tracked
                         .insert(relative.to_path_buf().tap(util::PathBuf), metadata);
@@ -107,24 +99,14 @@ impl Status {
         }
     }
 
-    fn is_trackable(&self, entry: &workspace::DirEntry) -> io::Result<bool> {
-        let relative = entry.relative();
-        let file_type = entry.file_type();
+    fn is_trackable(&self, entry: &workspace::Entry) -> io::Result<bool> {
+        let relative = entry.relative_path();
 
-        if file_type.is_file() {
+        if entry.metadata().mode.is_file() {
             return Ok(!self.index.contains_key(relative));
         }
 
-        if file_type.is_symlink() {
-            unimplemented!();
-        }
-
-        for entry in self.workspace.walk(relative, |walkdir| {
-            walkdir
-                .min_depth(1)
-                .max_depth(1)
-                .sort_by_key(|entry| entry.file_type().is_dir())
-        }) {
+        for entry in self.workspace.walk_list(relative)? {
             if self.is_trackable(&entry?)? {
                 return Ok(true);
             }

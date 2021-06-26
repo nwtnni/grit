@@ -1,6 +1,10 @@
+use std::fs;
+use std::io;
 use std::path;
 use std::rc::Rc;
 
+use crate::meta;
+use crate::util;
 use crate::util::Tap as _;
 
 #[derive(Debug)]
@@ -19,52 +23,166 @@ impl Workspace {
         &self.root
     }
 
-    pub fn walk<F: FnOnce(walkdir::WalkDir) -> walkdir::WalkDir>(
+    pub fn walk_list(&self, relative: &path::Path) -> io::Result<util::Or<WalkFile, WalkList>> {
+        self.walk(WalkList::new, relative)
+    }
+
+    pub fn walk_tree(&self, relative: &path::Path) -> io::Result<util::Or<WalkFile, WalkTree>> {
+        self.walk(WalkTree::new, relative)
+    }
+
+    fn walk<F: for<'a> FnOnce(Rc<path::Path>, &'a path::Path) -> io::Result<W>, W>(
         &self,
+        walker: F,
         relative: &path::Path,
-        configure: F,
-    ) -> impl Iterator<Item = walkdir::Result<DirEntry>> {
+    ) -> io::Result<util::Or<WalkFile, W>> {
         let root = Rc::clone(&self.root);
-        let path = self.root.join(relative);
-        let git = self.root.join(".git");
-        walkdir::WalkDir::new(path)
-            .tap(configure)
-            .into_iter()
-            .filter_entry(move |entry| !entry.path().starts_with(&git))
-            .map(move |entry| {
-                entry.map(|entry| DirEntry {
-                    root: Rc::clone(&root),
-                    inner: entry,
-                })
-            })
+        let path = root.join(relative);
+        let metadata = fs::metadata(&path)?;
+        let file_type = metadata.file_type();
+
+        if file_type.is_file() {
+            Entry {
+                root,
+                path,
+                metadata: meta::Metadata::from(metadata),
+            }
+            .tap(Option::Some)
+            .tap(WalkFile)
+            .tap(util::Or::L)
+            .tap(Result::Ok)
+        } else if file_type.is_dir() {
+            walker(root, &path).map(util::Or::R)
+        } else {
+            unimplemented!("Unsupported file type: {:?}", file_type);
+        }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct DirEntry {
+pub struct Entry {
     root: Rc<path::Path>,
-    inner: walkdir::DirEntry,
+    pub path: path::PathBuf,
+    pub metadata: meta::Metadata,
 }
 
-impl std::ops::Deref for DirEntry {
-    type Target = walkdir::DirEntry;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+impl Entry {
+    pub fn path(&self) -> &path::Path {
+        &self.path
     }
-}
 
-impl DirEntry {
-    pub fn relative(&self) -> &path::Path {
-        self.inner
-            .path()
+    pub fn relative_path(&self) -> &path::Path {
+        self.path
             .strip_prefix(&*self.root)
-            .expect("[INTERNAL ERROR]: workspace must contain path")
+            .expect("[INTERNAL ERROR]: workspace must contain entry")
+    }
+
+    pub fn metadata(&self) -> &meta::Metadata {
+        &self.metadata
     }
 }
 
-impl From<DirEntry> for walkdir::DirEntry {
-    fn from(entry: DirEntry) -> Self {
-        entry.inner
+#[derive(Debug)]
+pub struct WalkList {
+    root: Rc<path::Path>,
+    iter: fs::ReadDir,
+}
+
+impl WalkList {
+    pub fn new(root: Rc<path::Path>, path: &path::Path) -> io::Result<Self> {
+        Ok(WalkList {
+            root: Rc::clone(&root),
+            iter: fs::read_dir(path)?,
+        })
+    }
+}
+
+impl Iterator for WalkList {
+    type Item = io::Result<Entry>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let entry = match self.iter.next()? {
+            Ok(entry) => entry,
+            Err(error) => return Some(Err(error)),
+        };
+
+        let metadata = match entry.metadata() {
+            Ok(metadata) => metadata,
+            Err(error) => return Some(Err(error)),
+        };
+
+        Some(Ok(Entry {
+            root: Rc::clone(&self.root),
+            path: entry.path(),
+            metadata: meta::Metadata::from(metadata),
+        }))
+    }
+}
+
+#[derive(Debug)]
+pub struct WalkFile(Option<Entry>);
+
+impl Iterator for WalkFile {
+    type Item = io::Result<Entry>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.take().map(Result::Ok)
+    }
+}
+
+#[derive(Debug)]
+pub struct WalkTree {
+    root: Rc<path::Path>,
+    stack: Vec<fs::ReadDir>,
+}
+
+impl WalkTree {
+    fn new(root: Rc<path::Path>, path: &path::Path) -> io::Result<Self> {
+        Ok(WalkTree {
+            root: Rc::clone(&root),
+            stack: vec![fs::read_dir(path)?],
+        })
+    }
+}
+
+impl Iterator for WalkTree {
+    type Item = io::Result<Entry>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let entry = loop {
+            match self.stack.last_mut()?.next() {
+                Some(Ok(entry)) => break entry,
+                Some(Err(error)) => return Some(Err(error)),
+                None => {
+                    self.stack.pop();
+                }
+            }
+        };
+
+        let metadata = match entry.metadata() {
+            Ok(metadata) => metadata,
+            Err(error) => return Some(Err(error)),
+        };
+
+        let file_type = metadata.file_type();
+
+        let entry = Entry {
+            root: Rc::clone(&self.root),
+            path: entry.path(),
+            metadata: meta::Metadata::from(&metadata),
+        };
+
+        if file_type.is_file() {
+            return Some(Ok(entry));
+        }
+
+        if !file_type.is_dir() {
+            unimplemented!("Unsupported file type: {:?}", file_type);
+        }
+
+        match fs::read_dir(&entry.path) {
+            Ok(iter) => self.stack.push(iter),
+            Err(error) => return Some(Err(error)),
+        }
+
+        return Some(Ok(entry));
     }
 }

@@ -1,4 +1,3 @@
-use std::convert;
 use std::env;
 use std::fs;
 use std::io;
@@ -38,22 +37,22 @@ struct Add {
 impl Add {
     fn run(mut self) -> io::Result<()> {
         for path in self.paths {
-            for entry in self.workspace.walk(&path, convert::identity) {
+            for entry in self.workspace.walk_tree(&path)? {
                 let entry = entry?;
-                let relative = entry.relative();
+                let relative = entry.relative_path();
 
-                if entry.file_type().is_dir() {
+                if entry.metadata.mode.is_directory() {
                     continue;
                 }
 
-                let metadata = entry.metadata()?;
                 let blob = fs::read(entry.path())
                     .map(object::Blob::new)
                     .map(crate::Object::Blob)?;
 
                 let id = self.database.store(&blob)?;
 
-                self.index.insert(&metadata, id, relative.to_path_buf());
+                self.index
+                    .insert(entry.metadata, id, relative.to_path_buf());
             }
         }
 

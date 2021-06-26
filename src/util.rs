@@ -17,6 +17,27 @@ pub trait Tap: Sized {
 
 impl<T: Sized> Tap for T {}
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Or<L, R> {
+    L(L),
+    R(R),
+}
+
+impl<L, R, T> Iterator for Or<L, R>
+where
+    L: Iterator<Item = T>,
+    R: Iterator<Item = T>,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Or::L(left) => left.next(),
+            Or::R(right) => right.next(),
+        }
+    }
+}
+
 // See: http://idubrov.name/rust/2018/06/01/tricking-the-hashmap.html
 // and: https://github.com/sunshowers/borrow-complex-key-example
 pub trait Key {

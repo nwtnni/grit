@@ -14,7 +14,7 @@ use byteorder::WriteBytesExt as _;
 
 use crate::util::Tap as _;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Metadata {
     /// Change time (whole seconds)
     pub ctime: u32,
@@ -81,21 +81,29 @@ impl Metadata {
     }
 }
 
-impl convert::TryFrom<&'_ fs::Metadata> for Metadata {
-    type Error = num::TryFromIntError;
-    fn try_from(metadata: &fs::Metadata) -> Result<Self, Self::Error> {
-        Ok(Self {
-            ctime: metadata.ctime().tap(u32::try_from)?,
-            ctime_nsec: metadata.ctime_nsec().tap(u32::try_from)?,
-            mtime: metadata.mtime().tap(u32::try_from)?,
-            mtime_nsec: metadata.mtime_nsec().tap(u32::try_from)?,
-            dev: metadata.dev().tap(u32::try_from)?,
-            ino: metadata.ino().tap(u32::try_from)?,
-            mode: Mode::from(metadata),
-            uid: metadata.uid(),
-            gid: metadata.gid(),
-            size: metadata.size().tap(u32::try_from)?,
-        })
+impl From<fs::Metadata> for Metadata {
+    fn from(metadata: fs::Metadata) -> Self {
+        Self::from(&metadata)
+    }
+}
+
+impl From<&'_ fs::Metadata> for Metadata {
+    fn from(metadata: &fs::Metadata) -> Self {
+        (|| -> Result<Self, num::TryFromIntError> {
+            Ok(Self {
+                ctime: metadata.ctime().tap(u32::try_from)?,
+                ctime_nsec: metadata.ctime_nsec().tap(u32::try_from)?,
+                mtime: metadata.mtime().tap(u32::try_from)?,
+                mtime_nsec: metadata.mtime_nsec().tap(u32::try_from)?,
+                dev: metadata.dev().tap(u32::try_from)?,
+                ino: metadata.ino().tap(u32::try_from)?,
+                mode: Mode::from(metadata),
+                uid: metadata.uid(),
+                gid: metadata.gid(),
+                size: metadata.size().tap(u32::try_from)?,
+            })
+        })()
+        .expect("[INTERNAL ERROR]: could not cast `stat` field(s) to u32")
     }
 }
 
@@ -121,6 +129,14 @@ impl Mode {
             Mode::Regular => 0o100644,
             Mode::Executable => 0o100755,
         }
+    }
+
+    pub fn is_directory(&self) -> bool {
+        matches!(self, Self::Directory)
+    }
+
+    pub fn is_file(&self) -> bool {
+        matches!(self, Self::Regular | Self::Executable)
     }
 }
 
