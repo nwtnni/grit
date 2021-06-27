@@ -79,10 +79,7 @@ impl Status {
 
     fn walk_index(&self) {
         for entry in self.index.files() {
-            let metadata = match self
-                .tracked
-                .get(&util::Path(entry.path()) as &dyn util::Key)
-            {
+            let metadata = match self.tracked.get(&entry.path() as &dyn util::Key) {
                 Some(metadata) => metadata,
                 None => {
                     println!(" D {}", entry.path().display());

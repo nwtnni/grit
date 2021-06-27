@@ -41,7 +41,7 @@ where
 // See: http://idubrov.name/rust/2018/06/01/tricking-the-hashmap.html
 // and: https://github.com/sunshowers/borrow-complex-key-example
 pub trait Key {
-    fn key(&self) -> Path;
+    fn key(&self) -> &[u8];
 }
 
 impl<'a> Eq for dyn Key + 'a {}
@@ -77,8 +77,8 @@ impl<'a> Ord for dyn Key + 'a {
 pub struct PathBuf(pub path::PathBuf);
 
 impl Key for PathBuf {
-    fn key(&self) -> Path {
-        Path(self.0.as_path())
+    fn key(&self) -> &[u8] {
+        self.0.as_os_str().as_bytes()
     }
 }
 
@@ -100,29 +100,14 @@ impl Ord for PathBuf {
     }
 }
 
-/// Wrapper around `std::path::Path` that compares paths byte-wise (including the
-/// directory separator) as opposed to component-wise. This matches how `git` stores
-/// and orders paths.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Path<'a>(pub &'a path::Path);
-
-impl<'a> Key for Path<'a> {
-    fn key(&self) -> Path {
-        *self
+impl Key for &'_ path::Path {
+    fn key(&self) -> &[u8] {
+        self.as_os_str().as_bytes()
     }
 }
 
-impl<'a> PartialOrd for Path<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<'a> Ord for Path<'a> {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.0
-            .as_os_str()
-            .as_bytes()
-            .cmp(other.0.as_os_str().as_bytes())
+impl Key for &'_ str {
+    fn key(&self) -> &[u8] {
+        self.as_bytes()
     }
 }

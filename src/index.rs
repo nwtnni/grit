@@ -91,9 +91,7 @@ impl Index {
     }
 
     pub fn contains_key(&self, path: &path::Path) -> bool {
-        let file_tracked = self
-            .entries
-            .contains_key(&util::Path(path) as &dyn util::Key);
+        let file_tracked = self.entries.contains_key(&path as &dyn util::Key);
 
         let directory_tracked = self.descendants(path).next().is_some();
 
@@ -101,7 +99,7 @@ impl Index {
     }
 
     pub fn get(&self, path: &path::Path) -> Option<&Entry> {
-        self.entries.get(&util::Path(path) as &dyn util::Key)
+        self.entries.get(&path as &dyn util::Key)
     }
 
     pub fn files<'a>(&'a self) -> impl Iterator<Item = &'a Entry> + 'a {
@@ -116,7 +114,6 @@ impl Index {
             .ancestors()
             .skip(1)
             .take_while(|ancestor| *ancestor != path::Path::new(""))
-            .map(util::Path)
             .filter_map(|ancestor| self.entries.remove(&ancestor as &dyn util::Key))
             .for_each(|entry| {
                 log::debug!("Removing conflicting ancestor: {}", entry.path().display())
@@ -148,7 +145,7 @@ impl Index {
             // We exclude the lower bound here instead of using a symmetric
             // `.skip(1)` because `path` may or may not be in the index.
             .range::<dyn util::Key, _>((
-                ops::Bound::Excluded(&util::Path(path) as &dyn util::Key),
+                ops::Bound::Excluded(&path as &dyn util::Key),
                 ops::Bound::Unbounded,
             ))
             // Ignore sibling files that are byte-wise sorted after `path`,
