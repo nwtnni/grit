@@ -8,6 +8,12 @@ impl Blob {
         Blob(data)
     }
 
+    pub fn read<R: io::Read>(reader: &mut R) -> anyhow::Result<Self> {
+        let mut buffer = Vec::new();
+        reader.read_to_end(&mut buffer)?;
+        Ok(Self(buffer))
+    }
+
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(&self.0)
     }
