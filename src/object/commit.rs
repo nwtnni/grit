@@ -1,5 +1,6 @@
 use std::io;
 use std::io::Write as _;
+use std::str;
 
 use crate::object;
 
@@ -79,6 +80,32 @@ pub struct Author {
 impl Author {
     pub fn new(name: String, email: String, time: chrono::DateTime<chrono::Local>) -> Self {
         Author { name, email, time }
+    }
+
+    #[allow(unused)]
+    fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
+        let mut name = Vec::new();
+        reader.read_until(b'<', &mut name)?;
+        assert_eq!(name.pop(), Some(b'>'));
+        assert_eq!(name.pop(), Some(b' '));
+        let name = String::from_utf8(name)?;
+
+        let mut email = Vec::new();
+        reader.read_until(b' ', &mut email)?;
+        assert_eq!(email.pop(), Some(b' '));
+        assert_eq!(email.pop(), Some(b'>'));
+        let email = String::from_utf8(email)?;
+
+        let mut time = Vec::new();
+        reader.read_until(b' ', &mut time)?;
+        let lo = time.len();
+        time.extend([0; 5]);
+        reader.read_exact(&mut time[lo..])?;
+        let time = str::from_utf8(&time)
+            .map(|time| chrono::DateTime::parse_from_str(time, "%s %z"))?
+            .map(|time| time.with_timezone(&chrono::Local))?;
+
+        Ok(Self { name, email, time })
     }
 
     fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
