@@ -2,6 +2,8 @@ use std::io;
 use std::io::Write as _;
 use std::str;
 
+use byteorder::ReadBytesExt as _;
+
 use crate::object;
 
 #[derive(Clone, Debug)]
@@ -29,6 +31,46 @@ impl Commit {
 
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
+        let tree = object::Id::read_hex(reader)?;
+        assert_eq!(reader.read_u8()?, b'\n');
+
+        let mut tag = Vec::new();
+        reader.read_until(b' ', &mut tag)?;
+
+        let parent = if tag == b"parent " {
+            let parent = object::Id::read_hex(reader)?;
+            assert_eq!(reader.read_u8()?, b'\n');
+            tag.clear();
+            reader.read_until(b' ', &mut tag)?;
+            Some(parent)
+        } else {
+            None
+        };
+
+        assert_eq!(tag, b"author ");
+        let author = Author::read(reader)?;
+        assert_eq!(reader.read_u8()?, b'\n');
+
+        tag.clear();
+        reader.read_until(b' ', &mut tag)?;
+
+        // TODO: store committer separately
+        assert_eq!(tag, b"committer ");
+        let _committer = Author::read(reader)?;
+        assert_eq!(reader.read_u8()?, b'\n');
+        assert_eq!(reader.read_u8()?, b'\n');
+
+        let mut message = String::new();
+        reader.read_to_string(&mut message)?;
+        Ok(Commit {
+            tree,
+            parent,
+            author,
+            message,
+        })
     }
 
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
@@ -82,7 +124,6 @@ impl Author {
         Author { name, email, time }
     }
 
-    #[allow(unused)]
     fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
         let mut name = Vec::new();
         reader.read_until(b'<', &mut name)?;
