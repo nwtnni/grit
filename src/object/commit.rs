@@ -33,11 +33,11 @@ impl Commit {
 
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(b"tree ")?;
-        self.tree.write(writer)?;
+        self.tree.write_hex(writer)?;
 
         if let Some(parent) = self.parent {
             writer.write_all(b"\nparent ")?;
-            parent.write(writer)?;
+            parent.write_hex(writer)?;
         }
 
         writer.write_all(b"\nauthor ")?;

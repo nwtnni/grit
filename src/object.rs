@@ -118,7 +118,11 @@ impl Id {
         path::PathBuf::from(buffer)
     }
 
-    pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+    pub fn write_bytes<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(&self.0)
+    }
+
+    pub fn write_hex<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         self.0
             .iter()
             .copied()
