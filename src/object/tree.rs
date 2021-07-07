@@ -1,10 +1,14 @@
 use std::cmp;
+use std::convert::TryFrom as _;
+use std::ffi;
 use std::io;
 use std::os::unix::ffi::OsStrExt as _;
+use std::os::unix::ffi::OsStringExt as _;
 use std::path;
 
 use crate::meta;
 use crate::object;
+use crate::util::Tap as _;
 
 // Invariant: sorted
 #[derive(Clone, Debug)]
@@ -42,6 +46,28 @@ impl Node {
 
     pub fn id(&self) -> &object::Id {
         &self.id
+    }
+
+    pub fn read<R: io::BufRead>(reader: &mut R) -> io::Result<Option<Self>> {
+        let mut mode = Vec::new();
+        reader.read_until(b' ', &mut mode)?;
+        match mode.pop() {
+            None => return Ok(None),
+            Some(byte) => assert_eq!(byte, b' '),
+        }
+        // TODO: error handling?
+        let mode = String::from_utf8(mode)
+            .unwrap()
+            .tap(|mode| meta::Mode::try_from(&*mode))
+            .unwrap();
+
+        let mut path = Vec::new();
+        reader.read_until(0, &mut path)?;
+        assert_eq!(path.pop(), Some(0));
+        let path = ffi::OsString::from_vec(path).tap(path::PathBuf::from);
+
+        let id = object::Id::read_bytes(reader)?;
+        Ok(Some(Self { path, id, mode }))
     }
 
     fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
