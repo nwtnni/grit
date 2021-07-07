@@ -2,6 +2,7 @@ use std::cmp;
 use std::convert::TryFrom as _;
 use std::ffi;
 use std::io;
+use std::iter;
 use std::os::unix::ffi::OsStrExt as _;
 use std::os::unix::ffi::OsStringExt as _;
 use std::path;
@@ -17,6 +18,12 @@ pub struct Tree(Vec<Node>);
 impl Tree {
     pub fn new(nodes: Vec<Node>) -> Self {
         Tree(nodes)
+    }
+
+    pub fn read<R: io::BufRead + io::Seek>(reader: &mut R) -> io::Result<Self> {
+        iter::from_fn(|| Node::read(reader).transpose())
+            .collect::<Result<Vec<_>, _>>()
+            .map(Tree)
     }
 
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
