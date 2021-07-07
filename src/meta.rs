@@ -140,16 +140,19 @@ impl Mode {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct InvalidMode(u32);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InvalidMode {
+    Octal(String),
+    Value(u32),
+}
 
 impl fmt::Display for InvalidMode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            fmt,
-            "Invalid mode {:#o}, expected 0o040000 or 0o100644 or 0o100755",
-            self.0,
-        )
+        match self {
+            InvalidMode::Octal(mode) => write!(fmt, "Invalid value {}", mode)?,
+            InvalidMode::Value(mode) => write!(fmt, "Invalid value {:#o}", mode)?,
+        }
+        write!(fmt, ", expected 0o040000 or 0o100644 or 0o100755",)
     }
 }
 
@@ -162,8 +165,17 @@ impl convert::TryFrom<u32> for Mode {
             0o040000 => Ok(Mode::Directory),
             0o100644 => Ok(Mode::Regular),
             0o100755 => Ok(Mode::Executable),
-            invalid => Err(InvalidMode(invalid)),
+            invalid => Err(InvalidMode::Value(invalid)),
         }
+    }
+}
+
+impl convert::TryFrom<&'_ str> for Mode {
+    type Error = InvalidMode;
+    fn try_from(mode: &'_ str) -> Result<Self, Self::Error> {
+        u32::from_str_radix(mode, 8)
+            .map_err(|_| InvalidMode::Octal(String::from(mode)))
+            .and_then(Mode::try_from)
     }
 }
 
