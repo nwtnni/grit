@@ -3,7 +3,6 @@
 use std::fmt;
 use std::io;
 use std::path;
-use std::str;
 
 use sha1::Sha1;
 
@@ -29,6 +28,19 @@ impl Object {
         self.write(&mut cursor)
             .expect("[INTERNAL ERROR]: write to `Vec` failed");
         buffer
+    }
+
+    pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
+        let mut r#type = Vec::new();
+        reader.read_until(b' ', &mut r#type)?;
+        assert_eq!(r#type.pop(), Some(b' '));
+
+        match &*r#type {
+            Blob::TYPE => Blob::read(reader).map(Object::Blob),
+            Commit::TYPE => Commit::read(reader).map(Object::Commit),
+            Tree::TYPE => Tree::read(reader).map(Object::Tree),
+            _ => unreachable!(),
+        }
     }
 
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {

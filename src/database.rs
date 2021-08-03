@@ -1,3 +1,4 @@
+use std::fs;
 use std::io;
 use std::io::Write as _;
 use std::path;
@@ -14,6 +15,19 @@ pub struct Database {
 impl Database {
     pub fn new(root: path::PathBuf) -> io::Result<Self> {
         Ok(Database { root })
+    }
+
+    pub fn load(&self, id: &object::Id) -> anyhow::Result<Object> {
+        let path = self.root.join(id.to_path_buf());
+
+        let mut stream = fs::OpenOptions::new()
+            .read(true)
+            .write(false)
+            .open(&path)
+            .map(flate2::read::ZlibDecoder::new)
+            .map(io::BufReader::new)?;
+
+        Object::read(&mut stream)
     }
 
     pub fn store(&self, object: &Object) -> io::Result<object::Id> {

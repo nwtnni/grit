@@ -22,7 +22,7 @@ impl Tree {
         Tree(nodes)
     }
 
-    pub fn read<R: io::BufRead + io::Seek>(reader: &mut R) -> io::Result<Self> {
+    pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
         iter::from_fn(|| Node::read(reader).transpose())
             .collect::<Result<Vec<_>, _>>()
             .map(Tree)
@@ -53,7 +53,7 @@ impl Node {
         &self.id
     }
 
-    pub fn read<R: io::BufRead>(reader: &mut R) -> io::Result<Option<Self>> {
+    pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Option<Self>> {
         let mut mode = Vec::new();
         reader.read_until(b' ', &mut mode)?;
         match mode.pop() {
