@@ -32,7 +32,7 @@ impl Object {
     }
 
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
-        writer.write_all(self.r#type().as_bytes())?;
+        writer.write_all(self.r#type())?;
         writer.write_all(b" ")?;
 
         write!(writer, "{}\0", self.len())?;
@@ -44,11 +44,11 @@ impl Object {
         }
     }
 
-    fn r#type(&self) -> &'static str {
+    fn r#type(&self) -> &'static [u8] {
         match self {
-            Object::Blob(blob) => blob.r#type(),
-            Object::Commit(commit) => commit.r#type(),
-            Object::Tree(tree) => tree.r#type(),
+            Object::Blob(_) => Blob::TYPE,
+            Object::Commit(_) => Commit::TYPE,
+            Object::Tree(_) => Tree::TYPE,
         }
     }
 

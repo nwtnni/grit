@@ -16,6 +16,8 @@ use crate::util::Tap as _;
 pub struct Tree(Vec<Node>);
 
 impl Tree {
+    pub const TYPE: &'static [u8] = b"tree";
+
     pub fn new(nodes: Vec<Node>) -> Self {
         Tree(nodes)
     }
@@ -28,10 +30,6 @@ impl Tree {
 
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         self.0.iter().try_for_each(|node| node.write(writer))
-    }
-
-    pub fn r#type(&self) -> &'static str {
-        "tree"
     }
 
     pub fn len(&self) -> usize {

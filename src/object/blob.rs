@@ -4,6 +4,8 @@ use std::io;
 pub struct Blob(Vec<u8>);
 
 impl Blob {
+    pub const TYPE: &'static [u8] = b"blob";
+
     pub fn new(data: Vec<u8>) -> Self {
         Blob(data)
     }
@@ -16,10 +18,6 @@ impl Blob {
 
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(&self.0)
-    }
-
-    pub fn r#type(&self) -> &'static str {
-        "blob"
     }
 
     pub fn len(&self) -> usize {

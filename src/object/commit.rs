@@ -15,6 +15,8 @@ pub struct Commit {
 }
 
 impl Commit {
+    pub const TYPE: &'static [u8] = b"commit";
+
     pub fn new(
         tree: object::Id,
         parent: Option<object::Id>,
@@ -90,10 +92,6 @@ impl Commit {
 
         writer.write_all(b"\n\n")?;
         writer.write_all(self.message.as_bytes())
-    }
-
-    pub fn r#type(&self) -> &'static str {
-        "commit"
     }
 
     pub fn len(&self) -> usize {
