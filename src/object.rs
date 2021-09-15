@@ -13,12 +13,13 @@ use crate::util::Tap as _;
 mod blob;
 mod commit;
 mod person;
-pub mod tree;
+mod tree;
 
 pub use blob::Blob;
 pub use commit::Commit;
 pub use person::Person;
 pub use tree::Tree;
+pub use tree::TreeNode;
 
 #[derive(Clone, Debug)]
 pub enum Object {

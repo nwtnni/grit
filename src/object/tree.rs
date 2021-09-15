@@ -14,17 +14,17 @@ use crate::util::Tap as _;
 
 // Invariant: sorted
 #[derive(Clone, Debug)]
-pub struct Tree(Vec<Node>);
+pub struct Tree(Vec<TreeNode>);
 
 impl Tree {
     pub const TYPE: &'static [u8] = b"tree";
 
-    pub fn new(nodes: Vec<Node>) -> Self {
+    pub fn new(nodes: Vec<TreeNode>) -> Self {
         Tree(nodes)
     }
 
     pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
-        iter::from_fn(|| Node::read(reader).transpose())
+        iter::from_fn(|| TreeNode::read(reader).transpose())
             .collect::<Result<Vec<_>, _>>()
             .map(Tree)
     }
@@ -34,28 +34,28 @@ impl Tree {
     }
 
     pub fn len(&self) -> usize {
-        self.0.iter().map(Node::len).sum()
+        self.0.iter().map(TreeNode::len).sum()
     }
 }
 
 impl<'a> IntoIterator for &'a Tree {
-    type IntoIter = slice::Iter<'a, Node>;
-    type Item = &'a Node;
+    type IntoIter = slice::Iter<'a, TreeNode>;
+    type Item = &'a TreeNode;
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Node {
+pub struct TreeNode {
     path: path::PathBuf,
     id: object::Id,
     mode: meta::Mode,
 }
 
-impl Node {
+impl TreeNode {
     pub fn new(path: path::PathBuf, id: object::Id, mode: meta::Mode) -> Self {
-        Node { path, id, mode }
+        TreeNode { path, id, mode }
     }
 
     pub fn id(&self) -> &object::Id {
@@ -109,13 +109,13 @@ impl Node {
     }
 }
 
-impl PartialOrd for Node {
+impl PartialOrd for TreeNode {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Node {
+impl Ord for TreeNode {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.path
             .cmp(&other.path)
