@@ -4,6 +4,8 @@ use std::hash;
 use std::os::unix::ffi::OsStrExt as _;
 use std::path;
 
+pub mod hex;
+
 pub trait Tap: Sized {
     fn tap<F: FnOnce(Self) -> T, T>(self, apply: F) -> T {
         apply(self)
