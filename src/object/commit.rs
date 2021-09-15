@@ -35,6 +35,10 @@ impl Commit {
         &self.message
     }
 
+    pub fn tree(&self) -> &object::Id {
+        &self.tree
+    }
+
     pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
         let mut tag = Vec::new();
         reader.read_until(b' ', &mut tag)?;

@@ -6,6 +6,7 @@ use std::iter;
 use std::os::unix::ffi::OsStrExt as _;
 use std::os::unix::ffi::OsStringExt as _;
 use std::path;
+use std::slice;
 
 use crate::meta;
 use crate::object;
@@ -37,6 +38,14 @@ impl Tree {
     }
 }
 
+impl<'a> IntoIterator for &'a Tree {
+    type IntoIter = slice::Iter<'a, Node>;
+    type Item = &'a Node;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Node {
     path: path::PathBuf,
@@ -51,6 +60,14 @@ impl Node {
 
     pub fn id(&self) -> &object::Id {
         &self.id
+    }
+
+    pub fn mode(&self) -> &meta::Mode {
+        &self.mode
+    }
+
+    pub fn path(&self) -> &path::Path {
+        &self.path
     }
 
     pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Option<Self>> {
