@@ -35,12 +35,13 @@ impl Database {
         let id = object::Id::hash(&buffer);
         let path = self.root.join(id.to_path_buf());
 
-        // Object has already been written to disk.
-        if path.exists() {
-            return Ok(id);
-        }
+        let mut file = match file::Temp::new(path) {
+            Ok(file) => file,
+            // Object has already been written to disk.
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => return Ok(id),
+            Err(error) => return Err(error),
+        };
 
-        let mut file = file::Temp::new(path)?;
         let mut stream = flate2::write::ZlibEncoder::new(&mut file, flate2::Compression::default());
 
         stream.write_all(&buffer)?;
