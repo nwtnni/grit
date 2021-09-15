@@ -3,15 +3,15 @@ use std::io::Write as _;
 use std::str;
 
 #[derive(Clone, Debug)]
-pub struct Author {
+pub struct Person {
     name: String,
     email: String,
     time: chrono::DateTime<chrono::Local>,
 }
 
-impl Author {
+impl Person {
     pub fn new(name: String, email: String, time: chrono::DateTime<chrono::Local>) -> Self {
-        Author { name, email, time }
+        Person { name, email, time }
     }
 
     pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {

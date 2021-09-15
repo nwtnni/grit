@@ -10,14 +10,14 @@ use sha1::Sha1;
 use crate::util::hex;
 use crate::util::Tap as _;
 
-mod author;
 mod blob;
 mod commit;
+mod person;
 pub mod tree;
 
-pub use author::Author;
 pub use blob::Blob;
 pub use commit::Commit;
+pub use person::Person;
 pub use tree::Tree;
 
 #[derive(Clone, Debug)]

@@ -4,13 +4,13 @@ use std::str;
 use byteorder::ReadBytesExt as _;
 
 use crate::object;
-use crate::object::Author;
+use crate::object::Person;
 
 #[derive(Clone, Debug)]
 pub struct Commit {
     tree: object::Id,
     parent: Option<object::Id>,
-    author: Author,
+    author: Person,
     message: String,
 }
 
@@ -20,7 +20,7 @@ impl Commit {
     pub fn new(
         tree: object::Id,
         parent: Option<object::Id>,
-        author: Author,
+        author: Person,
         message: String,
     ) -> Self {
         Commit {
@@ -61,7 +61,7 @@ impl Commit {
         };
 
         assert_eq!(tag, b"author ");
-        let author = Author::read(reader)?;
+        let author = Person::read(reader)?;
         assert_eq!(reader.read_u8()?, b'\n');
 
         tag.clear();
@@ -69,7 +69,7 @@ impl Commit {
 
         // TODO: store committer separately
         assert_eq!(tag, b"committer ");
-        let _committer = Author::read(reader)?;
+        let _committer = Person::read(reader)?;
         assert_eq!(reader.read_u8()?, b'\n');
         assert_eq!(reader.read_u8()?, b'\n');
 

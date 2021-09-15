@@ -70,7 +70,7 @@ impl Commit {
             .unwrap_or_default()
             .to_owned();
 
-        let author = object::Author::new(self.author_name, self.author_email, chrono::Local::now());
+        let author = object::Person::new(self.author_name, self.author_email, chrono::Local::now());
         let parent = self.references.read_head()?;
         let commit = crate::Object::Commit(object::Commit::new(
             commit_tree,
