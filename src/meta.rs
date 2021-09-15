@@ -43,7 +43,7 @@ impl Metadata {
         &self.mode
     }
 
-    pub fn read<R: io::Read>(reader: &mut R) -> io::Result<Self> {
+    pub fn read<R: io::Read>(reader: &mut R) -> anyhow::Result<Self> {
         Ok(Metadata {
             ctime: reader.read_u32::<BigEndian>()?,
             ctime_nsec: reader.read_u32::<BigEndian>()?,
@@ -51,10 +51,7 @@ impl Metadata {
             mtime_nsec: reader.read_u32::<BigEndian>()?,
             dev: reader.read_u32::<BigEndian>()?,
             ino: reader.read_u32::<BigEndian>()?,
-            mode: reader
-                .read_u32::<BigEndian>()?
-                .tap(Mode::try_from)
-                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?,
+            mode: reader.read_u32::<BigEndian>()?.tap(Mode::try_from)?,
             uid: reader.read_u32::<BigEndian>()?,
             gid: reader.read_u32::<BigEndian>()?,
             size: reader.read_u32::<BigEndian>()?,

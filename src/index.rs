@@ -12,6 +12,7 @@ use std::os::unix::ffi::OsStrExt as _;
 use std::os::unix::ffi::OsStringExt as _;
 use std::path;
 
+use anyhow::anyhow;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt as _;
 use byteorder::WriteBytesExt as _;
@@ -29,7 +30,7 @@ pub struct Index {
 }
 
 impl Index {
-    pub fn lock(path: path::PathBuf) -> io::Result<Self> {
+    pub fn lock(path: path::PathBuf) -> anyhow::Result<Self> {
         let lock = file::WriteLock::new(path)?;
 
         let (entries, lock) = match lock.upgrade()? {
@@ -38,7 +39,7 @@ impl Index {
                 let mut lock = file::Checksum::new(lock);
                 let entries = Self::read(&mut lock)?;
                 let lock = lock
-                    .verify_checksum()?
+                    .read_checksum()?
                     .tap(file::ReadWriteLock::downgrade)
                     .tap(file::Checksum::new);
                 (entries, lock)
@@ -52,32 +53,24 @@ impl Index {
         })
     }
 
-    fn read<R: io::Read>(reader: &mut R) -> io::Result<BTreeMap<util::PathBuf, Entry>> {
+    fn read<R: io::Read>(reader: &mut R) -> anyhow::Result<BTreeMap<util::PathBuf, Entry>> {
         let mut header = [0u8; 4];
         reader.read_exact(&mut header)?;
         if &header != b"DIRC" {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Expected `DIRC` signature bytes, but found {:?}", header),
+            return Err(anyhow!(
+                "Expected `DIRC` signature bytes, but found {:?}",
+                header
             ));
         }
 
         let version = reader.read_u32::<BigEndian>()?;
         if version != 2 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Expected version 2, but found {}", version),
-            ));
+            return Err(anyhow!("Expected version 2, but found {}", version));
         }
 
         let count = match reader.read_u32::<BigEndian>()?.tap(usize::try_from) {
             Ok(count) => count,
-            Err(error) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Entry count does not fit in u32: {}", error),
-                ))
-            }
+            Err(error) => return Err(anyhow!("Entry count does not fit in u32: {}", error)),
         };
 
         let mut entries = BTreeMap::new();
@@ -350,7 +343,7 @@ impl Entry {
         &self.path
     }
 
-    fn read<R: io::Read>(reader: &mut R) -> io::Result<Self> {
+    fn read<R: io::Read>(reader: &mut R) -> anyhow::Result<Self> {
         let metadata = meta::Metadata::read(reader)?;
         let id = object::Id::read_bytes(reader)?;
         let flag = reader.read_u16::<BigEndian>()?;

@@ -39,7 +39,7 @@ impl Configuration {
         let root = env::current_dir()?;
         let repository = crate::Repository::new(root);
         let commit = Commit {
-            database: repository.database()?,
+            database: repository.database(),
             index: repository.index()?,
             references: repository.references(),
             author_name: self.author_name,
@@ -62,7 +62,7 @@ struct Commit {
 }
 
 impl Commit {
-    pub fn run(self) -> io::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         let commit_tree = self.walk_index()?;
         let commit_header = self
             .message
@@ -72,7 +72,7 @@ impl Commit {
             .to_owned();
 
         let author = commit::Author::new(self.author_name, self.author_email, chrono::Local::now());
-        let parent = self.references.head()?;
+        let parent = self.references.read_head()?;
         let commit = crate::Object::Commit(object::Commit::new(
             commit_tree,
             parent,
@@ -81,7 +81,7 @@ impl Commit {
         ));
         let commit_id = self.database.store(&commit)?;
 
-        self.references.set_head(&commit_id)?;
+        self.references.write_head(&commit_id)?;
 
         println!(
             "[{}{}] {}",
@@ -97,7 +97,7 @@ impl Commit {
         Ok(())
     }
 
-    fn walk_index(&self) -> io::Result<object::Id> {
+    fn walk_index(&self) -> anyhow::Result<object::Id> {
         let mut stack = Vec::new();
         let mut count = Vec::new();
 

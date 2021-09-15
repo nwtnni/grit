@@ -13,8 +13,8 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(root: path::PathBuf) -> io::Result<Self> {
-        Ok(Database { root })
+    pub fn new(root: path::PathBuf) -> Self {
+        Database { root }
     }
 
     pub fn load(&self, id: &object::Id) -> anyhow::Result<Object> {

@@ -1,5 +1,4 @@
 use std::fs;
-use std::io;
 use std::path;
 
 #[derive(Clone, Debug)]
@@ -16,11 +15,11 @@ impl Repository {
         &self.root
     }
 
-    pub fn database(&self) -> io::Result<crate::Database> {
+    pub fn database(&self) -> crate::Database {
         crate::Database::new(self.root.join(".git/objects"))
     }
 
-    pub fn index(&self) -> io::Result<crate::Index> {
+    pub fn index(&self) -> anyhow::Result<crate::Index> {
         crate::Index::lock(self.root.join(".git/index"))
     }
 
@@ -32,7 +31,7 @@ impl Repository {
         crate::Workspace::new(self.root.clone())
     }
 
-    pub fn init(&mut self) -> io::Result<()> {
+    pub fn init(&mut self) -> anyhow::Result<()> {
         for directory in &[".git/objects", ".git/refs"] {
             self.root.push(directory);
             fs::create_dir_all(&self.root)?;

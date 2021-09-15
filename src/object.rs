@@ -89,13 +89,13 @@ impl Id {
         &self.0
     }
 
-    pub fn read_bytes<R: io::Read>(reader: &mut R) -> io::Result<Self> {
+    pub fn read_bytes<R: io::Read>(reader: &mut R) -> anyhow::Result<Self> {
         let mut buffer = [0u8; 20];
         reader.read_exact(&mut buffer)?;
         Ok(Self(buffer))
     }
 
-    pub fn read_hex<R: io::Read>(reader: &mut R) -> io::Result<Self> {
+    pub fn read_hex<R: io::Read>(reader: &mut R) -> anyhow::Result<Self> {
         let mut buffer = [0u8; 40];
         reader.read_exact(&mut buffer)?;
 
@@ -147,7 +147,7 @@ impl fmt::Display for Id {
 }
 
 impl str::FromStr for Id {
-    type Err = io::Error;
+    type Err = anyhow::Error;
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         string
             .as_bytes()

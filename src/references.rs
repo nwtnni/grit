@@ -16,18 +16,18 @@ impl References {
         References { root, head }
     }
 
-    pub fn set_head(&self, id: &object::Id) -> io::Result<()> {
-        let mut head = file::WriteLock::new(self.head.clone())?;
-        write!(&mut head, "{}", id)?;
-        head.commit()
-    }
-
-    pub fn head(&self) -> io::Result<Option<object::Id>> {
+    pub fn read_head(&self) -> anyhow::Result<Option<object::Id>> {
         let mut head = match file::WriteLock::new(self.head.clone())?.upgrade()? {
             file::Lock::ReadWrite(lock) => lock,
             file::Lock::Write(_) => return Ok(None),
         };
 
         object::Id::read_hex(&mut head).map(Option::Some)
+    }
+
+    pub fn write_head(&self, id: &object::Id) -> io::Result<()> {
+        let mut head = file::WriteLock::new(self.head.clone())?;
+        write!(&mut head, "{}", id)?;
+        head.commit()
     }
 }

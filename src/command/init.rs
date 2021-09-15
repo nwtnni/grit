@@ -1,6 +1,5 @@
 use std::env;
 use std::fs;
-use std::io;
 use std::path;
 
 use structopt::StructOpt;
@@ -36,7 +35,7 @@ struct Init {
 }
 
 impl Init {
-    fn run(mut self) -> io::Result<()> {
+    fn run(mut self) -> anyhow::Result<()> {
         self.repository.init()?;
 
         log::info!(

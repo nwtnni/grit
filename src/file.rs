@@ -46,7 +46,7 @@ impl<T: io::Read> io::Read for Checksum<T> {
 }
 
 impl<T: io::Read> Checksum<T> {
-    pub fn verify_checksum(mut self) -> io::Result<T> {
+    pub fn read_checksum(mut self) -> io::Result<T> {
         let mut buffer = [0u8; 20];
 
         self.inner.read_exact(&mut buffer)?;

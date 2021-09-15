@@ -1,6 +1,5 @@
 use std::env;
 use std::fs;
-use std::io;
 use std::path;
 
 use structopt::StructOpt;
@@ -17,7 +16,7 @@ impl Configuration {
         let root = env::current_dir()?;
         let repository = crate::Repository::new(root);
         let add = Add {
-            database: repository.database()?,
+            database: repository.database(),
             index: repository.index()?,
             workspace: repository.workspace(),
             paths: self.paths,
@@ -35,7 +34,7 @@ struct Add {
 }
 
 impl Add {
-    fn run(mut self) -> io::Result<()> {
+    fn run(mut self) -> anyhow::Result<()> {
         for path in self.paths {
             for entry in self.workspace.walk_tree(&path)? {
                 let entry = entry?;
@@ -56,6 +55,7 @@ impl Add {
             }
         }
 
-        self.index.commit()
+        self.index.commit()?;
+        Ok(())
     }
 }

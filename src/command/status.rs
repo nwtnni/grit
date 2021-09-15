@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::env;
-use std::io;
 use std::path;
 
 use structopt::StructOpt;
@@ -37,7 +36,7 @@ struct Status {
 }
 
 impl Status {
-    fn run(mut self) -> io::Result<()> {
+    fn run(mut self) -> anyhow::Result<()> {
         self.walk_fs(path::Path::new("."))?;
         self.walk_index();
         for util::PathBuf(path) in &self.untracked {
@@ -46,7 +45,7 @@ impl Status {
         Ok(())
     }
 
-    fn walk_fs(&mut self, relative: &path::Path) -> io::Result<()> {
+    fn walk_fs(&mut self, relative: &path::Path) -> anyhow::Result<()> {
         for entry in self.workspace.walk_list(relative)? {
             let entry = entry?;
             let relative = entry.relative_path();
@@ -96,7 +95,7 @@ impl Status {
         }
     }
 
-    fn is_trackable(&self, entry: &workspace::Entry) -> io::Result<bool> {
+    fn is_trackable(&self, entry: &workspace::Entry) -> anyhow::Result<bool> {
         let relative = entry.relative_path();
 
         if entry.metadata().mode.is_file() {
