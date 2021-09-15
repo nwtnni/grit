@@ -36,10 +36,14 @@ impl Commit {
     }
 
     pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
+        let mut tag = Vec::new();
+        reader.read_until(b' ', &mut tag)?;
+        assert_eq!(tag, b"tree ");
+
         let tree = object::Id::read_hex(reader)?;
         assert_eq!(reader.read_u8()?, b'\n');
 
-        let mut tag = Vec::new();
+        tag.clear();
         reader.read_until(b' ', &mut tag)?;
 
         let parent = if tag == b"parent " {
@@ -125,7 +129,7 @@ impl Author {
     fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
         let mut name = Vec::new();
         reader.read_until(b'<', &mut name)?;
-        assert_eq!(name.pop(), Some(b'>'));
+        assert_eq!(name.pop(), Some(b'<'));
         assert_eq!(name.pop(), Some(b' '));
         let name = String::from_utf8(name)?;
 

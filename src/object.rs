@@ -39,6 +39,12 @@ impl Object {
         reader.read_until(b' ', &mut r#type)?;
         assert_eq!(r#type.pop(), Some(b' '));
 
+        // TODO: validate length when parsing
+        let mut len = Vec::new();
+        reader.read_until(0, &mut len)?;
+        assert_eq!(len.pop(), Some(0));
+        let _len = String::from_utf8(len).unwrap().parse::<usize>().unwrap();
+
         match &*r#type {
             Blob::TYPE => Blob::read(reader).map(Object::Blob),
             Commit::TYPE => Commit::read(reader).map(Object::Commit),
