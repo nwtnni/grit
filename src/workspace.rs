@@ -183,6 +183,6 @@ impl Iterator for WalkTree {
             Err(error) => return Some(Err(error)),
         }
 
-        return Some(Ok(entry));
+        Some(Ok(entry))
     }
 }

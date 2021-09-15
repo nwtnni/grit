@@ -82,7 +82,7 @@ pub struct Id([u8; 20]);
 
 impl Id {
     pub fn hash(bytes: &[u8]) -> Self {
-        Self(Sha1::from(bytes.as_ref()).digest().bytes())
+        Self(Sha1::from(bytes).digest().bytes())
     }
 
     pub fn as_bytes(&self) -> &[u8; 20] {
@@ -109,7 +109,7 @@ impl Id {
         Ok(Id(id))
     }
 
-    pub fn to_path_buf(&self) -> path::PathBuf {
+    pub fn to_path_buf(self) -> path::PathBuf {
         let mut buffer = String::with_capacity(40);
         let [hi, lo] = hex::encode(self.0[0]);
         buffer.push(hi as char);

@@ -134,7 +134,12 @@ impl Commit {
             let node = tree::Node::new(name, id, *mode);
 
             stack.push(node);
-            count.last_mut().map(|count| *count += 1);
+
+            match count.last_mut() {
+                None if path == path::Path::new("") => (),
+                None => unreachable!(),
+                Some(count) => *count += 1,
+            }
         }
 
         let tree_id = *stack

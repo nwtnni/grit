@@ -95,7 +95,7 @@ impl Index {
         self.entries.get(&path as &dyn util::Key)
     }
 
-    pub fn files<'a>(&'a self) -> impl Iterator<Item = &'a Entry> + 'a {
+    pub fn files(&self) -> impl Iterator<Item = &Entry> {
         self.entries.values()
     }
 
@@ -133,7 +133,7 @@ impl Index {
 
     /// If `path` is a directory, then return all existing index entries
     /// below it in the directory tree, exclduing `path` itself.
-    fn descendants<'a>(&'a self, path: &'a path::Path) -> impl Iterator<Item = &path::Path> + 'a {
+    fn descendants<'a>(&'a self, path: &'a path::Path) -> impl Iterator<Item = &path::Path> {
         self.entries
             // We exclude the lower bound here instead of using a symmetric
             // `.skip(1)` because `path` may or may not be in the index.
