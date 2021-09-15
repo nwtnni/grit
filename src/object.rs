@@ -3,8 +3,11 @@
 use std::fmt;
 use std::io;
 use std::path;
+use std::str;
 
 use sha1::Sha1;
+
+use crate::util::Tap as _;
 
 pub mod blob;
 pub mod commit;
@@ -150,6 +153,16 @@ impl fmt::Display for Id {
             write!(fmt, "{}{}", hi as char, lo as char)?;
         }
         Ok(())
+    }
+}
+
+impl str::FromStr for Id {
+    type Err = io::Error;
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        string
+            .as_bytes()
+            .tap(io::Cursor::new)
+            .tap(|mut cursor| Id::read_hex(&mut cursor))
     }
 }
 
