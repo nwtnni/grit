@@ -7,7 +7,6 @@ use structopt::StructOpt;
 
 use crate::index;
 use crate::object;
-use crate::object::commit;
 use crate::object::tree;
 use crate::util::Tap as _;
 
@@ -71,7 +70,7 @@ impl Commit {
             .unwrap_or_default()
             .to_owned();
 
-        let author = commit::Author::new(self.author_name, self.author_email, chrono::Local::now());
+        let author = object::Author::new(self.author_name, self.author_email, chrono::Local::now());
         let parent = self.references.read_head()?;
         let commit = crate::Object::Commit(object::Commit::new(
             commit_tree,

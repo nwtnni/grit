@@ -10,10 +10,12 @@ use sha1::Sha1;
 use crate::util::hex;
 use crate::util::Tap as _;
 
-pub mod blob;
-pub mod commit;
+mod author;
+mod blob;
+mod commit;
 pub mod tree;
 
+pub use author::Author;
 pub use blob::Blob;
 pub use commit::Commit;
 pub use tree::Tree;
