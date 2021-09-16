@@ -5,6 +5,7 @@ use std::path;
 
 use crate::file;
 use crate::object;
+use crate::util::Tap as _;
 use crate::Object;
 
 #[derive(Debug)]
@@ -15,6 +16,14 @@ pub struct Database {
 impl Database {
     pub fn new(root: path::PathBuf) -> Self {
         Database { root }
+    }
+
+    pub fn contains(&self, id: &object::Id) -> anyhow::Result<bool> {
+        self.root
+            .join(id.to_path_buf())
+            .tap(fs::metadata)
+            .map(|_| true)
+            .map_err(anyhow::Error::from)
     }
 
     pub fn load(&self, id: &object::Id) -> anyhow::Result<Object> {
