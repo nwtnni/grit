@@ -105,9 +105,20 @@ impl Iterator for WalkList {
     type Item = io::Result<Entry>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let entry = match self.iter.next()? {
-            Ok(entry) => entry,
-            Err(error) => return Some(Err(error)),
+        let entry = loop {
+            match self.iter.next()? {
+                Ok(entry)
+                    if entry
+                        .path()
+                        .strip_prefix(&self.root)
+                        .expect("[INTERNAL ERROR]: `WalkList` iterator not under root")
+                        .starts_with(".git") =>
+                {
+                    continue;
+                }
+                Ok(entry) => break entry,
+                Err(error) => return Some(Err(error)),
+            };
         };
 
         let metadata = match entry.metadata() {
@@ -153,6 +164,15 @@ impl Iterator for WalkTree {
     fn next(&mut self) -> Option<Self::Item> {
         let entry = loop {
             match self.stack.last_mut()?.next() {
+                Some(Ok(entry))
+                    if entry
+                        .path()
+                        .strip_prefix(&self.root)
+                        .expect("[INTERNAL ERROR]: `WalkTree` iterator not under root")
+                        .starts_with(".git") =>
+                {
+                    continue;
+                }
                 Some(Ok(entry)) => break entry,
                 Some(Err(error)) => return Some(Err(error)),
                 None => {
