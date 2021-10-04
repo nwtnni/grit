@@ -57,26 +57,14 @@ impl<'a> IntoIterator for &'a Root {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Node {
-    path: path::PathBuf,
-    id: object::Id,
-    mode: meta::Mode,
+    pub path: path::PathBuf,
+    pub id: object::Id,
+    pub mode: meta::Mode,
 }
 
 impl Node {
     pub fn new(path: path::PathBuf, id: object::Id, mode: meta::Mode) -> Self {
         Node { path, id, mode }
-    }
-
-    pub fn id(&self) -> &object::Id {
-        &self.id
-    }
-
-    pub fn mode(&self) -> &meta::Mode {
-        &self.mode
-    }
-
-    pub fn path(&self) -> &path::Path {
-        &self.path
     }
 
     pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Option<Self>> {

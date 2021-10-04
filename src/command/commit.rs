@@ -141,10 +141,10 @@ impl Commit {
             }
         }
 
-        let tree_id = *stack
+        let tree_id = stack
             .pop()
             .expect("[INTERNAL ERROR]: index must contain at least root directory")
-            .id();
+            .id;
 
         Ok(tree_id)
     }

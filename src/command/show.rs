@@ -58,15 +58,10 @@ impl Show {
         };
 
         for node in &tree {
-            if node.mode().is_directory() {
-                self.show_tree(node.id())?;
+            if node.mode.is_directory() {
+                self.show_tree(&node.id)?;
             } else {
-                println!(
-                    "{} {} {}",
-                    node.mode().as_str(),
-                    node.id(),
-                    node.path().display()
-                );
+                println!("{} {} {}", node.mode.as_str(), node.id, node.path.display());
             }
         }
 

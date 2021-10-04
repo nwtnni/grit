@@ -83,13 +83,10 @@ impl Status {
                 crate::Object::Commit(commit) => recurse(database, commit.tree(), state),
                 crate::Object::Tree(tree) => {
                     for node in tree {
-                        if node.mode().is_directory() {
-                            recurse(database, node.id(), state)?;
+                        if node.mode.is_directory() {
+                            recurse(database, &node.id, state)?;
                         } else {
-                            state.insert(
-                                node.path().to_path_buf().tap(util::PathBuf),
-                                (*node.id(), *node.mode()),
-                            );
+                            state.insert(util::PathBuf(node.path), (node.id, node.mode));
                         }
                     }
                     Ok(())
