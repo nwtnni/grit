@@ -32,11 +32,13 @@ impl Repository {
     }
 
     pub fn init(&mut self) -> anyhow::Result<()> {
-        for directory in &[".git/objects", ".git/refs"] {
+        self.root.push(".git");
+        for directory in &["objects", "refs"] {
             self.root.push(directory);
             fs::create_dir_all(&self.root)?;
             self.root.pop();
         }
+        self.root.pop();
         Ok(())
     }
 }
