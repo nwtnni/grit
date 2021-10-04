@@ -1,6 +1,7 @@
 use std::borrow;
 use std::cmp;
 use std::hash;
+use std::ops;
 use std::os::unix::ffi::OsStrExt as _;
 use std::path;
 
@@ -111,5 +112,18 @@ impl Key for &'_ path::Path {
 impl Key for &'_ str {
     fn key(&self) -> &[u8] {
         self.as_bytes()
+    }
+}
+
+impl ops::Deref for PathBuf {
+    type Target = path::PathBuf;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl ops::DerefMut for PathBuf {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
