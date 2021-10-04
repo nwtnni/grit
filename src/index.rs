@@ -83,12 +83,16 @@ impl Index {
         Ok(entries)
     }
 
-    pub fn contains_key(&self, path: &path::Path) -> bool {
-        let file_tracked = self.entries.contains_key(&path as &dyn util::Key);
+    pub fn contains(&self, path: &path::Path) -> bool {
+        self.contains_file(path) || self.contains_directory(path)
+    }
 
-        let directory_tracked = self.descendants(path).next().is_some();
+    pub fn contains_file(&self, path: &path::Path) -> bool {
+        self.entries.contains_key(&path as &dyn util::Key)
+    }
 
-        file_tracked || directory_tracked
+    pub fn contains_directory(&self, path: &path::Path) -> bool {
+        self.descendants(path).next().is_some()
     }
 
     pub fn get(&self, path: &path::Path) -> Option<&Entry> {
