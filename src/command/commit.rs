@@ -7,6 +7,7 @@ use structopt::StructOpt;
 
 use crate::index;
 use crate::object;
+use crate::object::tree;
 use crate::util::Tap as _;
 
 #[derive(StructOpt)]
@@ -122,14 +123,14 @@ impl Commit {
                     };
                     stack
                         .split_off(index)
-                        .tap(object::Tree::new)
+                        .tap(tree::Root::new)
                         .tap(crate::Object::Tree)
                         .tap(|tree| self.database.store(&tree))?
                 }
             };
 
             let mode = node.mode();
-            let node = object::TreeNode::new(name, id, *mode);
+            let node = tree::Node::new(name, id, *mode);
 
             stack.push(node);
 

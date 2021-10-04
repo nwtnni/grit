@@ -15,19 +15,19 @@ use crate::util::Tap as _;
 
 // Invariant: sorted
 #[derive(Clone, Debug)]
-pub struct Tree(Vec<TreeNode>);
+pub struct Root(Vec<Node>);
 
-impl Tree {
+impl Root {
     pub const TYPE: &'static [u8] = b"tree";
 
-    pub fn new(nodes: Vec<TreeNode>) -> Self {
-        Tree(nodes)
+    pub fn new(nodes: Vec<Node>) -> Self {
+        Root(nodes)
     }
 
     pub fn read<R: io::BufRead>(reader: &mut R) -> anyhow::Result<Self> {
-        iter::from_fn(|| TreeNode::read(reader).transpose())
+        iter::from_fn(|| Node::read(reader).transpose())
             .collect::<Result<Vec<_>, _>>()
-            .map(Tree)
+            .map(Root)
     }
 
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
@@ -35,36 +35,36 @@ impl Tree {
     }
 
     pub fn len(&self) -> usize {
-        self.0.iter().map(TreeNode::len).sum()
+        self.0.iter().map(Node::len).sum()
     }
 }
 
-impl IntoIterator for Tree {
-    type IntoIter = vec::IntoIter<TreeNode>;
-    type Item = TreeNode;
+impl IntoIterator for Root {
+    type IntoIter = vec::IntoIter<Node>;
+    type Item = Node;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl<'a> IntoIterator for &'a Tree {
-    type IntoIter = slice::Iter<'a, TreeNode>;
-    type Item = &'a TreeNode;
+impl<'a> IntoIterator for &'a Root {
+    type IntoIter = slice::Iter<'a, Node>;
+    type Item = &'a Node;
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TreeNode {
+pub struct Node {
     path: path::PathBuf,
     id: object::Id,
     mode: meta::Mode,
 }
 
-impl TreeNode {
+impl Node {
     pub fn new(path: path::PathBuf, id: object::Id, mode: meta::Mode) -> Self {
-        TreeNode { path, id, mode }
+        Node { path, id, mode }
     }
 
     pub fn id(&self) -> &object::Id {
@@ -118,13 +118,13 @@ impl TreeNode {
     }
 }
 
-impl PartialOrd for TreeNode {
+impl PartialOrd for Node {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for TreeNode {
+impl Ord for Node {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.path
             .cmp(&other.path)

@@ -13,19 +13,17 @@ use crate::util::Tap as _;
 mod blob;
 mod commit;
 mod person;
-mod tree;
+pub mod tree;
 
 pub use blob::Blob;
 pub use commit::Commit;
 pub use person::Person;
-pub use tree::Tree;
-pub use tree::TreeNode;
 
 #[derive(Clone, Debug)]
 pub enum Object {
     Blob(Blob),
     Commit(Commit),
-    Tree(Tree),
+    Tree(tree::Root),
 }
 
 impl Object {
@@ -51,7 +49,7 @@ impl Object {
         match &*r#type {
             Blob::TYPE => Blob::read(reader).map(Object::Blob),
             Commit::TYPE => Commit::read(reader).map(Object::Commit),
-            Tree::TYPE => Tree::read(reader).map(Object::Tree),
+            tree::Root::TYPE => tree::Root::read(reader).map(Object::Tree),
             _ => unreachable!(),
         }
     }
@@ -73,7 +71,7 @@ impl Object {
         match self {
             Object::Blob(_) => Blob::TYPE,
             Object::Commit(_) => Commit::TYPE,
-            Object::Tree(_) => Tree::TYPE,
+            Object::Tree(_) => tree::Root::TYPE,
         }
     }
 
