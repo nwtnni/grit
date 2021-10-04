@@ -19,6 +19,10 @@ impl Workspace {
         }
     }
 
+    pub fn read(&self, relative: &path::Path) -> io::Result<Vec<u8>> {
+        fs::read(self.root.join(relative))
+    }
+
     pub fn root(&self) -> &path::Path {
         &self.root
     }
