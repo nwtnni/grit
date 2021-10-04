@@ -7,6 +7,7 @@ use std::os::unix::ffi::OsStrExt as _;
 use std::os::unix::ffi::OsStringExt as _;
 use std::path;
 use std::slice;
+use std::vec;
 
 use crate::meta;
 use crate::object;
@@ -35,6 +36,14 @@ impl Tree {
 
     pub fn len(&self) -> usize {
         self.0.iter().map(TreeNode::len).sum()
+    }
+}
+
+impl IntoIterator for Tree {
+    type IntoIter = vec::IntoIter<TreeNode>;
+    type Item = TreeNode;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
