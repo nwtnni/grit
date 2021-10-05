@@ -50,9 +50,9 @@ impl Status {
 
         let head = self.walk_head(&head_commit)?;
         let workspace = self.walk_workspace(path::Path::new("."))?;
-        let change = self.detect_change(&head, &workspace)?;
+        let changes = self.detect_changes(&head, &workspace)?;
 
-        for (path, index_head_change, workspace_index_change) in &change {
+        for (path, index_head_change, workspace_index_change) in &changes {
             if let Some(change) = index_head_change {
                 print!("{}", change);
             } else {
@@ -170,24 +170,24 @@ impl Status {
         Ok(state)
     }
 
-    fn detect_change(
+    fn detect_changes(
         &self,
         head: &HeadState,
         workspace: &WorkspaceState,
-    ) -> anyhow::Result<Change> {
-        let mut change = Change::default();
+    ) -> anyhow::Result<Changes> {
+        let mut changes = Changes::default();
 
         for entry in self.index.files() {
             match head.get(&entry.path() as &dyn util::Key) {
                 Some((id, mode)) if mode == entry.metadata().mode() && id == entry.id() => (),
-                Some(_) => change.insert_index_head(entry.path(), IndexHeadChange::Modified),
-                None => change.insert_index_head(entry.path(), IndexHeadChange::Added),
+                Some(_) => changes.insert_index_head(entry.path(), IndexHeadChange::Modified),
+                None => changes.insert_index_head(entry.path(), IndexHeadChange::Added),
             }
 
             let metadata = match workspace.tracked.get(&entry.path() as &dyn util::Key) {
                 Some(metadata) => metadata,
                 None => {
-                    change.insert_workspace_index(entry.path(), WorkspaceIndexChange::Deleted);
+                    changes.insert_workspace_index(entry.path(), WorkspaceIndexChange::Deleted);
                     continue;
                 }
             };
@@ -196,7 +196,7 @@ impl Status {
             let new = metadata;
 
             if new.mode != old.mode || new.size != old.size {
-                change.insert_workspace_index(entry.path(), WorkspaceIndexChange::Modified);
+                changes.insert_workspace_index(entry.path(), WorkspaceIndexChange::Modified);
                 continue;
             }
 
@@ -209,16 +209,16 @@ impl Status {
                 .map(|bytes| object::Id::hash(&bytes))?;
 
             if id != *entry.id() {
-                change.insert_workspace_index(entry.path(), WorkspaceIndexChange::Modified);
+                changes.insert_workspace_index(entry.path(), WorkspaceIndexChange::Modified);
             }
         }
 
         head.iter()
             .map(|(path, (_, _))| path)
             .filter(|path| !self.index.contains_file(path))
-            .for_each(|path| change.insert_index_head(path, IndexHeadChange::Deleted));
+            .for_each(|path| changes.insert_index_head(path, IndexHeadChange::Deleted));
 
-        Ok(change)
+        Ok(changes)
     }
 }
 
@@ -245,7 +245,7 @@ struct WorkspaceState {
 }
 
 #[derive(Clone, Debug, Default)]
-struct Change {
+struct Changes {
     /// Changes between the index and the HEAD commit.
     index_head: BTreeMap<util::PathBuf, IndexHeadChange>,
 
@@ -253,7 +253,7 @@ struct Change {
     workspace_index: BTreeMap<util::PathBuf, WorkspaceIndexChange>,
 }
 
-impl Change {
+impl Changes {
     fn insert_index_head(&mut self, path: &path::Path, change: IndexHeadChange) {
         self.index_head
             .insert(path.to_path_buf().tap(util::PathBuf), change);
@@ -265,11 +265,11 @@ impl Change {
     }
 }
 
-impl<'a> IntoIterator for &'a Change {
-    type Item = <ChangeIter<'a> as Iterator>::Item;
-    type IntoIter = ChangeIter<'a>;
+impl<'a> IntoIterator for &'a Changes {
+    type Item = <ChangesIter<'a> as Iterator>::Item;
+    type IntoIter = ChangesIter<'a>;
     fn into_iter(self) -> Self::IntoIter {
-        ChangeIter {
+        ChangesIter {
             index_head: self.index_head.iter().peekable(),
             workspace_index: self.workspace_index.iter().peekable(),
         }
@@ -277,12 +277,12 @@ impl<'a> IntoIterator for &'a Change {
 }
 
 #[derive(Clone, Debug)]
-struct ChangeIter<'a> {
+struct ChangesIter<'a> {
     index_head: iter::Peekable<btree_map::Iter<'a, util::PathBuf, IndexHeadChange>>,
     workspace_index: iter::Peekable<btree_map::Iter<'a, util::PathBuf, WorkspaceIndexChange>>,
 }
 
-impl<'a> Iterator for ChangeIter<'a> {
+impl<'a> Iterator for ChangesIter<'a> {
     type Item = (
         &'a path::Path,
         Option<IndexHeadChange>,
