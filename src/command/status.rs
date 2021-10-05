@@ -3,7 +3,6 @@ use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::env;
-use std::fmt;
 use std::iter;
 use std::ops;
 use std::path;
@@ -17,7 +16,10 @@ use crate::util::Tap as _;
 use crate::workspace;
 
 #[derive(StructOpt)]
-pub struct Configuration {}
+pub struct Configuration {
+    #[structopt(long)]
+    porcelain: bool,
+}
 
 impl Configuration {
     pub fn run(self) -> anyhow::Result<()> {
@@ -29,7 +31,7 @@ impl Configuration {
             references: repository.references(),
             workspace: repository.workspace(),
         };
-        status.run()?;
+        status.run(self.porcelain)?;
         Ok(())
     }
 }
@@ -42,7 +44,7 @@ struct Status {
 }
 
 impl Status {
-    fn run(self) -> anyhow::Result<()> {
+    fn run(self, porcelain: bool) -> anyhow::Result<()> {
         let head_commit = match self.references.read_head()? {
             None => return Ok(()),
             Some(head_commit) => head_commit,
@@ -52,27 +54,95 @@ impl Status {
         let workspace = self.walk_workspace(path::Path::new("."))?;
         let changes = self.detect_changes(&head, &workspace)?;
 
-        for (path, index_head_change, workspace_index_change) in &changes {
-            if let Some(change) = index_head_change {
-                print!("{}", change);
-            } else {
-                print!(" ");
-            }
+        if porcelain {
+            Self::print_porcelain(&changes, &workspace);
+        } else {
+            Self::print_pretty(&changes, &workspace);
+        }
 
-            if let Some(change) = workspace_index_change {
-                print!("{}", change);
-            } else {
-                print!(" ");
-            }
+        Ok(())
+    }
 
-            println!(" {}", path.display());
+    fn print_porcelain(changes: &Changes, workspace: &WorkspaceState) {
+        for (path, index_head_change, workspace_index_change) in changes {
+            println!(
+                "{}{} {}",
+                index_head_change
+                    .map(IndexHeadChange::into_porcelain)
+                    .unwrap_or(" "),
+                workspace_index_change
+                    .map(WorkspaceIndexChange::into_porcelain)
+                    .unwrap_or(" "),
+                path.display(),
+            );
         }
 
         for path in &workspace.untracked {
             println!("?? {}", path.display());
         }
+    }
 
-        Ok(())
+    fn print_pretty(changes: &Changes, workspace: &WorkspaceState) {
+        Self::print_change_set(
+            |change| Some(change.into_pretty()),
+            "Changes to be committed:\n  \
+                (use \"git restore --staged <file>...\" to unstage)",
+            &changes.index_head,
+        );
+
+        Self::print_change_set(
+            |change| Some(change.into_pretty()),
+            "Changes not staged for commit:\n  \
+                (use \"git add/rm <file>...\" to update what will be committed)\n  \
+                (use \"git restore <file>...\" to discard changes in working directory)",
+            &changes.workspace_index,
+        );
+
+        Self::print_change_set(
+            |()| None,
+            "Untracked files:\n  \
+                (use \"git add <file>...\" to include in what will be committed)",
+            workspace.untracked.iter().map(|path| (path, ())),
+        );
+
+        if !changes.index_head.is_empty() {
+            return;
+        }
+
+        if !changes.workspace_index.is_empty() {
+            println!("no changes added to commit (use \"git add\" and/or \"git commit -a\")");
+        } else if !workspace.untracked.is_empty() {
+            println!(
+                "nothing added to commit but untracked files present (use \"git add\" to track)"
+            );
+        } else {
+            println!("nothing to commit, working tree clean");
+        }
+    }
+
+    fn print_change_set<'a, 'b, I, T>(
+        display: fn(T) -> Option<&'static str>,
+        message: &'a str,
+        into_iter: I,
+    ) where
+        I: IntoIterator<Item = (&'b util::PathBuf, T)>,
+    {
+        let mut iter = into_iter.into_iter().peekable();
+        if iter.peek().is_none() {
+            return;
+        }
+
+        println!("{}", message);
+
+        for (path, status) in iter {
+            match display(status) {
+                Some(status) => print!("\t{:12}", status),
+                None => print!("\t"),
+            }
+            println!("{}", path.display());
+        }
+
+        println!();
     }
 
     fn walk_head(&self, tree: &object::Id) -> anyhow::Result<HeadState> {
@@ -343,12 +413,20 @@ enum IndexHeadChange {
     Modified,
 }
 
-impl fmt::Display for IndexHeadChange {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl IndexHeadChange {
+    fn into_porcelain(self) -> &'static str {
         match self {
-            IndexHeadChange::Added => write!(fmt, "A"),
-            IndexHeadChange::Deleted => write!(fmt, "D"),
-            IndexHeadChange::Modified => write!(fmt, "M"),
+            IndexHeadChange::Added => "A",
+            IndexHeadChange::Deleted => "D",
+            IndexHeadChange::Modified => "M",
+        }
+    }
+
+    fn into_pretty(self) -> &'static str {
+        match self {
+            IndexHeadChange::Added => "new file:",
+            IndexHeadChange::Deleted => "deleted:",
+            IndexHeadChange::Modified => "modified:",
         }
     }
 }
@@ -359,11 +437,18 @@ enum WorkspaceIndexChange {
     Modified,
 }
 
-impl fmt::Display for WorkspaceIndexChange {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl WorkspaceIndexChange {
+    fn into_porcelain(self) -> &'static str {
         match self {
-            WorkspaceIndexChange::Deleted => write!(fmt, "D"),
-            WorkspaceIndexChange::Modified => write!(fmt, "M"),
+            WorkspaceIndexChange::Deleted => "D",
+            WorkspaceIndexChange::Modified => "M",
+        }
+    }
+
+    fn into_pretty(self) -> &'static str {
+        match self {
+            WorkspaceIndexChange::Deleted => "deleted:",
+            WorkspaceIndexChange::Modified => "modified:",
         }
     }
 }
