@@ -1,7 +1,10 @@
+use std::cmp;
+use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::env;
 use std::fmt;
+use std::iter;
 use std::ops;
 use std::path;
 
@@ -49,14 +52,14 @@ impl Status {
         let workspace = self.walk_workspace(path::Path::new("."))?;
         let change = self.detect_change(&head, &workspace)?;
 
-        for path in &change.order {
-            if let Some(change) = change.index_head.get(path) {
+        for (path, index_head_change, workspace_index_change) in &change {
+            if let Some(change) = index_head_change {
                 print!("{}", change);
             } else {
                 print!(" ");
             }
 
-            if let Some(change) = change.workspace_index.get(path) {
+            if let Some(change) = workspace_index_change {
                 print!("{}", change);
             } else {
                 print!(" ");
@@ -243,9 +246,6 @@ struct WorkspaceState {
 
 #[derive(Clone, Debug, Default)]
 struct Change {
-    /// Globally ordered set of changed paths.
-    order: BTreeSet<util::PathBuf>,
-
     /// Changes between the index and the HEAD commit.
     index_head: BTreeMap<util::PathBuf, IndexHeadChange>,
 
@@ -255,15 +255,84 @@ struct Change {
 
 impl Change {
     fn insert_index_head(&mut self, path: &path::Path, change: IndexHeadChange) {
-        self.order.insert(path.to_path_buf().tap(util::PathBuf));
         self.index_head
             .insert(path.to_path_buf().tap(util::PathBuf), change);
     }
 
     fn insert_workspace_index(&mut self, path: &path::Path, change: WorkspaceIndexChange) {
-        self.order.insert(path.to_path_buf().tap(util::PathBuf));
         self.workspace_index
             .insert(path.to_path_buf().tap(util::PathBuf), change);
+    }
+}
+
+impl<'a> IntoIterator for &'a Change {
+    type Item = <ChangeIter<'a> as Iterator>::Item;
+    type IntoIter = ChangeIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        ChangeIter {
+            index_head: self.index_head.iter().peekable(),
+            workspace_index: self.workspace_index.iter().peekable(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ChangeIter<'a> {
+    index_head: iter::Peekable<btree_map::Iter<'a, util::PathBuf, IndexHeadChange>>,
+    workspace_index: iter::Peekable<btree_map::Iter<'a, util::PathBuf, WorkspaceIndexChange>>,
+}
+
+impl<'a> Iterator for ChangeIter<'a> {
+    type Item = (
+        &'a path::Path,
+        Option<IndexHeadChange>,
+        Option<WorkspaceIndexChange>,
+    );
+    fn next(&mut self) -> Option<Self::Item> {
+        let (index_head_path, index_head_change, workspace_index_path, workspace_index_change) =
+            match (
+                self.index_head.peek().copied(),
+                self.workspace_index.peek().copied(),
+            ) {
+                (None, None) => return None,
+                (Some((index_head_path, index_head_change)), None) => {
+                    self.index_head.next();
+                    return Some((index_head_path, Some(*index_head_change), None));
+                }
+                (None, Some((workspace_index_path, workspace_index_change))) => {
+                    self.workspace_index.next();
+                    return Some((workspace_index_path, None, Some(*workspace_index_change)));
+                }
+                (
+                    Some((index_head_path, index_head_change)),
+                    Some((workspace_index_path, workspace_index_change)),
+                ) => (
+                    &*index_head_path,
+                    *index_head_change,
+                    &*workspace_index_path,
+                    *workspace_index_change,
+                ),
+            };
+
+        match index_head_path.cmp(&workspace_index_path) {
+            cmp::Ordering::Less => {
+                self.index_head.next();
+                Some((index_head_path, Some(index_head_change), None))
+            }
+            cmp::Ordering::Equal => {
+                self.index_head.next();
+                self.workspace_index.next();
+                Some((
+                    index_head_path,
+                    Some(index_head_change),
+                    Some(workspace_index_change),
+                ))
+            }
+            cmp::Ordering::Greater => {
+                self.workspace_index.next();
+                Some((workspace_index_path, None, Some(workspace_index_change)))
+            }
+        }
     }
 }
 
