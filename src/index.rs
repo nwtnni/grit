@@ -35,11 +35,17 @@ impl Index {
 
         let (entries, lock) = match lock.upgrade()? {
             file::Lock::Write(lock) => (BTreeMap::new(), file::Checksum::new(lock)),
-            file::Lock::ReadWrite(lock) => {
-                let mut lock = file::Checksum::new(lock);
-                let entries = Self::read(&mut lock)?;
+            file::Lock::ReadWrite(mut lock) => {
+                let mut buffer = Vec::new();
+                lock.read_to_end(&mut buffer)?;
+
+                let entries = Self::read(&buffer)?;
+                let checksum = buffer.len() - 20;
+                let actual = sha1::Sha1::from(&buffer[..checksum]).digest().bytes();
+                let expected = &buffer[checksum..];
+                assert_eq!(actual, expected);
+
                 let lock = lock
-                    .read_checksum()?
                     .tap(file::ReadWriteLock::downgrade)
                     .tap(file::Checksum::new);
                 (entries, lock)
@@ -53,29 +59,28 @@ impl Index {
         })
     }
 
-    fn read<R: io::Read>(reader: &mut R) -> anyhow::Result<BTreeMap<util::PathBuf, Entry>> {
-        let mut header = [0u8; 4];
-        reader.read_exact(&mut header)?;
-        if &header != b"DIRC" {
+    fn read(buffer: &[u8]) -> anyhow::Result<BTreeMap<util::PathBuf, Entry>> {
+        let signature = &buffer[0..4];
+        if signature != b"DIRC" {
             return Err(anyhow!(
-                "Expected `DIRC` signature bytes, but found {:?}",
-                header
+                "Expected `DIRC` signature bytes, but found `{}`",
+                String::from_utf8_lossy(signature),
             ));
         }
 
-        let version = reader.read_u32::<BigEndian>()?;
+        let version = <[u8; 4]>::try_from(&buffer[4..8]).map(u32::from_be_bytes)?;
         if version != 2 {
-            return Err(anyhow!("Expected version 2, but found {}", version));
+            return Err(anyhow!("Expected version 2, but found version {}", version));
         }
 
-        let count = match reader.read_u32::<BigEndian>()?.tap(usize::try_from) {
-            Ok(count) => count,
-            Err(error) => return Err(anyhow!("Entry count does not fit in u32: {}", error)),
-        };
+        let count = <[u8; 4]>::try_from(&buffer[8..12])
+            .map(u32::from_be_bytes)
+            .map(usize::try_from)??;
 
         let mut entries = BTreeMap::new();
+        let mut cursor = io::Cursor::new(&buffer[12..]);
         for _ in 0..count {
-            let entry = Entry::read(reader)?;
+            let entry = Entry::read(&mut cursor)?;
             let key = entry.path.to_path_buf().tap(util::PathBuf);
             entries.insert(key, entry);
         }
