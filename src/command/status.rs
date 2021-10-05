@@ -188,16 +188,22 @@ impl Status<'_> {
             database: &crate::Database,
             tree: &object::Id,
             state: &mut HeadState,
+            prefix: &mut path::PathBuf,
         ) -> anyhow::Result<()> {
             match database.load(tree)? {
                 crate::Object::Blob(_) => unreachable!(),
-                crate::Object::Commit(commit) => recurse(database, commit.tree(), state),
+                crate::Object::Commit(commit) => recurse(database, commit.tree(), state, prefix),
                 crate::Object::Tree(tree) => {
                     for node in tree {
                         if node.mode.is_directory() {
-                            recurse(database, &node.id, state)?;
+                            prefix.push(&node.path);
+                            recurse(database, &node.id, state, prefix)?;
+                            prefix.pop();
                         } else {
-                            state.insert(util::PathBuf(node.path), (node.id, node.mode));
+                            state.insert(
+                                util::PathBuf(prefix.join(node.path)),
+                                (node.id, node.mode),
+                            );
                         }
                     }
                     Ok(())
@@ -206,7 +212,8 @@ impl Status<'_> {
         }
 
         let mut state = HeadState::default();
-        recurse(&self.database, tree, &mut state)?;
+        let mut prefix = path::PathBuf::default();
+        recurse(&self.database, tree, &mut state, &mut prefix)?;
         Ok(state)
     }
 
