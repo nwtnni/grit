@@ -104,8 +104,13 @@ impl Index {
         self.entries.get(&path as &dyn util::Key)
     }
 
-    pub fn files(&self) -> impl Iterator<Item = &Entry> {
-        self.entries.values()
+    pub fn entries_mut(&mut self) -> impl Iterator<Item = &mut Entry> {
+        self.entries.values_mut()
+    }
+
+    // TODO: is it possible to keep this hidden?
+    pub fn touch(&mut self) {
+        self.changed = true;
     }
 
     pub fn insert(&mut self, metadata: meta::Metadata, id: object::Id, path: path::PathBuf) {
@@ -350,6 +355,10 @@ impl Entry {
 
     pub fn path(&self) -> &path::Path {
         &self.path
+    }
+
+    pub fn touch(&mut self, metadata: meta::Metadata) {
+        self.metadata = metadata;
     }
 
     fn read<R: io::Read>(reader: &mut R) -> anyhow::Result<Self> {

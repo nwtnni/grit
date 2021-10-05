@@ -286,13 +286,14 @@ impl Status<'_> {
     }
 
     fn detect_changes(
-        &self,
+        &mut self,
         head: &HeadState,
         workspace: &WorkspaceState,
     ) -> anyhow::Result<Changes> {
         let mut changes = Changes::default();
+        let mut dirty = false;
 
-        for entry in self.index.files() {
+        for entry in self.index.entries_mut() {
             match head.get(&entry.path() as &dyn util::Key) {
                 Some((id, mode)) if mode == entry.metadata().mode() && id == entry.id() => (),
                 Some(_) => changes.insert_index_head(entry.path(), IndexHeadChange::Modified),
@@ -315,6 +316,14 @@ impl Status<'_> {
                 continue;
             }
 
+            if new.ctime == old.ctime
+                && new.ctime_nsec == old.ctime_nsec
+                && new.mtime == old.mtime
+                && new.mtime_nsec == old.mtime_nsec
+            {
+                continue;
+            }
+
             let id = self
                 .workspace
                 .read(entry.path())
@@ -323,7 +332,10 @@ impl Status<'_> {
                 .map(|object| object.to_bytes())
                 .map(|bytes| object::Id::hash(&bytes))?;
 
-            if id != *entry.id() {
+            if id == *entry.id() {
+                entry.touch(*new);
+                dirty = true;
+            } else {
                 changes.insert_workspace_index(entry.path(), WorkspaceIndexChange::Modified);
             }
         }
@@ -332,6 +344,11 @@ impl Status<'_> {
             .map(|(path, (_, _))| path)
             .filter(|path| !self.index.contains_file(path))
             .for_each(|path| changes.insert_index_head(path, IndexHeadChange::Deleted));
+
+        // TODO: can we hide this in `Index`?
+        if dirty {
+            self.index.touch();
+        }
 
         Ok(changes)
     }
