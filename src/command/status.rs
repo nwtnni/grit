@@ -3,11 +3,13 @@ use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::env;
+use std::io::Write as _;
 use std::iter;
 use std::ops;
 use std::path;
 
 use structopt::StructOpt;
+use termcolor::WriteColor as _;
 
 use crate::meta;
 use crate::object;
@@ -25,26 +27,35 @@ impl Configuration {
     pub fn run(self) -> anyhow::Result<()> {
         let root = env::current_dir()?;
         let repository = crate::Repository::new(root);
+        let stdout = termcolor::StandardStream::stdout(match isatty::stdout_isatty() {
+            true => termcolor::ColorChoice::Always,
+            false => termcolor::ColorChoice::Never,
+        });
+
         let status = Status {
             database: repository.database(),
             index: repository.index()?,
             references: repository.references(),
             workspace: repository.workspace(),
+            stdout: stdout.lock(),
         };
+
         status.run(self.porcelain)?;
+
         Ok(())
     }
 }
 
-struct Status {
+struct Status<'a> {
     database: crate::Database,
     index: crate::Index,
     workspace: crate::Workspace,
     references: crate::References,
+    stdout: termcolor::StandardStreamLock<'a>,
 }
 
-impl Status {
-    fn run(self, porcelain: bool) -> anyhow::Result<()> {
+impl Status<'_> {
+    fn run(mut self, porcelain: bool) -> anyhow::Result<()> {
         let head_commit = match self.references.read_head()? {
             None => return Ok(()),
             Some(head_commit) => head_commit,
@@ -55,17 +66,22 @@ impl Status {
         let changes = self.detect_changes(&head, &workspace)?;
 
         if porcelain {
-            Self::print_porcelain(&changes, &workspace);
+            self.print_porcelain(&changes, &workspace)?;
         } else {
-            Self::print_pretty(&changes, &workspace);
+            self.print_pretty(&changes, &workspace)?;
         }
 
         Ok(())
     }
 
-    fn print_porcelain(changes: &Changes, workspace: &WorkspaceState) {
+    fn print_porcelain(
+        &mut self,
+        changes: &Changes,
+        workspace: &WorkspaceState,
+    ) -> anyhow::Result<()> {
         for (path, index_head_change, workspace_index_change) in changes {
-            println!(
+            writeln!(
+                &mut self.stdout,
                 "{}{} {}",
                 index_head_change
                     .map(IndexHeadChange::into_porcelain)
@@ -74,75 +90,97 @@ impl Status {
                     .map(WorkspaceIndexChange::into_porcelain)
                     .unwrap_or(" "),
                 path.display(),
-            );
+            )?;
         }
 
         for path in &workspace.untracked {
-            println!("?? {}", path.display());
+            writeln!(&mut self.stdout, "?? {}", path.display())?;
         }
+
+        Ok(())
     }
 
-    fn print_pretty(changes: &Changes, workspace: &WorkspaceState) {
-        Self::print_change_set(
+    fn print_pretty(
+        &mut self,
+        changes: &Changes,
+        workspace: &WorkspaceState,
+    ) -> anyhow::Result<()> {
+        self.print_change_set(
+            termcolor::Color::Green,
             |change| Some(change.into_pretty()),
             "Changes to be committed:\n  \
                 (use \"git restore --staged <file>...\" to unstage)",
             &changes.index_head,
-        );
+        )?;
 
-        Self::print_change_set(
+        self.print_change_set(
+            termcolor::Color::Red,
             |change| Some(change.into_pretty()),
             "Changes not staged for commit:\n  \
                 (use \"git add/rm <file>...\" to update what will be committed)\n  \
                 (use \"git restore <file>...\" to discard changes in working directory)",
             &changes.workspace_index,
-        );
+        )?;
 
-        Self::print_change_set(
+        self.print_change_set(
+            termcolor::Color::Red,
             |()| None,
             "Untracked files:\n  \
                 (use \"git add <file>...\" to include in what will be committed)",
             workspace.untracked.iter().map(|path| (path, ())),
-        );
+        )?;
 
         if !changes.index_head.is_empty() {
-            return;
+            return Ok(());
         }
 
         if !changes.workspace_index.is_empty() {
-            println!("no changes added to commit (use \"git add\" and/or \"git commit -a\")");
+            writeln!(
+                &mut self.stdout,
+                "no changes added to commit (use \"git add\" and/or \"git commit -a\")"
+            )?;
         } else if !workspace.untracked.is_empty() {
-            println!(
+            writeln!(
+                &mut self.stdout,
                 "nothing added to commit but untracked files present (use \"git add\" to track)"
-            );
+            )?;
         } else {
-            println!("nothing to commit, working tree clean");
+            writeln!(&mut self.stdout, "nothing to commit, working tree clean")?;
         }
+
+        Ok(())
     }
 
     fn print_change_set<'a, 'b, I, T>(
+        &mut self,
+        color: termcolor::Color,
         display: fn(T) -> Option<&'static str>,
         message: &'a str,
         into_iter: I,
-    ) where
+    ) -> anyhow::Result<()>
+    where
         I: IntoIterator<Item = (&'b util::PathBuf, T)>,
     {
         let mut iter = into_iter.into_iter().peekable();
         if iter.peek().is_none() {
-            return;
+            return Ok(());
         }
 
-        println!("{}", message);
+        writeln!(&mut self.stdout, "{}", message)?;
+        self.stdout
+            .set_color(&termcolor::ColorSpec::new().set_fg(Some(color)))?;
 
         for (path, status) in iter {
             match display(status) {
-                Some(status) => print!("\t{:12}", status),
-                None => print!("\t"),
+                Some(status) => write!(&mut self.stdout, "\t{:12}", status)?,
+                None => write!(&mut self.stdout, "\t")?,
             }
-            println!("{}", path.display());
+            writeln!(&mut self.stdout, "{}", path.display())?;
         }
 
-        println!();
+        writeln!(&mut self.stdout)?;
+        self.stdout.reset()?;
+        Ok(())
     }
 
     fn walk_head(&self, tree: &object::Id) -> anyhow::Result<HeadState> {
