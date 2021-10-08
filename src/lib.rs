@@ -1,5 +1,6 @@
 pub mod command;
 pub mod database;
+mod diff;
 pub mod file;
 pub mod index;
 pub mod meta;
